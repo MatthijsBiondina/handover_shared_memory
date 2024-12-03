@@ -1,0 +1,4 @@
+depth_scale: 0.0001
+event_horizon: 5.0
+device: "cuda:0"
+world_distance_threshold: 0.1

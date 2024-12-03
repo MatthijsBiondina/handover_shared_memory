@@ -1,0 +1,8 @@
+ip_sophie: "10.42.0.162"
+ip_wilson: "10.42.0.163"
+
+default_joint_state: [   90,    -180, 90, -90,  -90,   0]
+wilson_rest: [   0,    0, -90, -90,  90,   0]
+
+dt: 0.1
+max_angular_velocity: 3.14

@@ -1,0 +1,16 @@
+robot_config_relative_path: "content/configs/robot/ur5e_robotiq_2f_85.yml"
+
+dt: 0.025
+num_seeds: 1
+max_planning_time: 0.1
+
+joint_names:
+  - "shoulder_pan_joint"
+  - "shoulder_lift_joint"
+  - "elbow_joint"
+  - "wrist_1_joint"
+  - "wrist_2_joint"
+  - "wrist_3_joint"
+
+default_joint_state: [   90,    -180, 90, -90,  -90,   0]
+retract_cfg: [ 90, -180, 90, -90, -90, 0]

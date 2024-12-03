@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CycloneDDS xmlns="https://eclipse.org/CycloneDDS/config">
+  <Domain id="any">
+    <SharedMemory />
+    <General>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
+  </Domain>
+</CycloneDDS>

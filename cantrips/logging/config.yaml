@@ -1,0 +1,5 @@
+file_logging: false
+level: 'WARNING'
+format: '%(asctime)s - %(module)s - ln%(lineno)s - %(funcName)s - %(levelname)s: %(message)s'
+
+filepath: "/home/matt/Python/HandOver/logs"
