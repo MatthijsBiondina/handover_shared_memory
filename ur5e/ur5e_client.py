@@ -2,7 +2,9 @@ import time
 
 import numpy as np
 from cyclonedds.domain import DomainParticipant
+from spatialmath.base import transl
 
+from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import WaitingForFirstMessageException
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
@@ -116,3 +118,21 @@ class Ur5eClient:
 
     def is_at_tcp_pose(self, pose: np.ndarray):
         return np.all(np.isclose(self.tcp_pose, pose, atol=0.01))
+
+    def look_at(self, position: np.ndarray, focus: np.ndarray):
+        z_axis = focus - position
+        z_axis = z_axis / np.linalg.norm(z_axis)
+
+        x_axis = np.cross(np.array([0.,0.,1.]), z_axis)
+        x_axis = x_axis / np.linalg.norm(x_axis)
+
+        y_axis = np.cross(z_axis, x_axis)
+        y_axis = y_axis / np.linalg.norm(y_axis)
+
+        R = np.array([x_axis, y_axis, z_axis]).T
+
+        tcp = np.eye(4)
+        tcp[:3, :3] = R
+        tcp[:3, 3] = position
+
+        return tcp

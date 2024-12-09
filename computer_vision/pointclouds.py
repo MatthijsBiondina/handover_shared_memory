@@ -157,39 +157,38 @@ class PointClouds:
         uv: np.ndarray,
         depth: np.ndarray,
         pointcloud: np.ndarray,
-        pixel_radius: int = 10,
-        xyz_radius: float = 0.10,
+        pixel_radius: int = 2,
+        xyz_radius: float = 0.1,
     ):
-        grid = MeshgridCache().get_meshgrid(depth.shape)
-        uv = tensor(uv, device=CONFIG.device, dtype=torch.float32)
-        bs = uv.shape[0]
+        u, v = uv[:, 0].astype(int), uv[:, 1].astype(int)
+        xyz = pointcloud[v, u]
+        return xyz
 
-        D_px = torch.linalg.norm(grid[None, :, :, :] - uv[:, None, None, :], dim=-1)
-        px_mask = D_px < pixel_radius
+    @staticmethod
+    def xyz2uv(xyz: np.ndarray, intrinsics: np.ndarray, extrinsics: np.ndarray):
+        pointcloud = tensor(xyz, device=CONFIG.device, dtype=torch.float32)
+        intrinsics = tensor(intrinsics, device=CONFIG.device, dtype=torch.float32)
+        extrinsics = tensor(extrinsics, device=CONFIG.device, dtype=torch.float32)
 
-        D = tensor(
-            depth * CONFIG.depth_scale, device=CONFIG.device, dtype=torch.float32
+        extrinsics_inv = torch.linalg.inv(extrinsics)
+        points_world_homogeneous = torch.hstack(
+            (pointcloud, torch.ones((pointcloud.shape[0], 1), device=CONFIG.device))
         )
-        D[(D == 0) | (D > CONFIG.event_horizon)] = torch.nan
-        D = D[None, ...].repeat(bs, 1, 1)
-        D[torch.isnan(D) | ~px_mask] = torch.inf
-        argmin = torch.argmin(D.view(bs, -1), dim=-1)
+        points_camera = (extrinsics_inv @ points_world_homogeneous.T).T[:, :3]
 
-        points = tensor(pointcloud, device=CONFIG.device, dtype=torch.float32)
-        obj_points = points.view(-1, 3)[argmin]
-        obj_points = obj_points[~torch.any(torch.isnan(obj_points), dim=-1)]
+        fx, fy = intrinsics[0, 0], intrinsics[1, 1]
+        cx, cy = intrinsics[0, 2], intrinsics[1, 2]
+        u = ((points_camera[:, 0] * fx / points_camera[:, 2]) + cx).to(torch.int)
+        v = ((points_camera[:, 1] * fy / points_camera[:, 2]) + cy).to(torch.int)
 
-        D_xyz = torch.linalg.norm(points[None, ...] - obj_points[:, None, None, :], dim=-1)
-        xyz_mask = (D_xyz < xyz_radius).view(obj_points.shape[0], -1)
-        points = points.view(-1, 3)[None, ...].repeat(obj_points.shape[0], 1, 1)
-        points[~xyz_mask] = torch.nan
+        uv = torch.stack((u, v), dim=-1)
+        return uv.cpu().numpy()
 
-        obj_xyz, _ = torch.nanmedian(points, dim=1)
-
-        return obj_xyz.cpu().numpy()
+        pyout()
 
 
 if __name__ == "__main__":
-    participant = CycloneParticipant()
-    node = PointClouds(participant)
-    node.run()
+    with torch.no_grad():
+        participant = CycloneParticipant()
+        node = PointClouds(participant)
+        node.run()

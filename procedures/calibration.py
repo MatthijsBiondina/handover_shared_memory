@@ -257,6 +257,8 @@ class CalibrationProcedure:
         # Progress bar for calibration iterations
         bar = pbar(range(100), desc="Calibrating")
         for _ in bar:
+            if error < 0.01:
+                break
             # Perform one calibration iteration
             extrinsics_, error_ = self.__calibrate_once(measurements)
             if error_ < error:

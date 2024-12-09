@@ -113,9 +113,9 @@ class DrakeScene:
         index_buffer["world"]["floor"] = airo_drake.add_floor(
             robot_diagram_builder, x_size=1.8, y_size=2.0
         )
-        index_buffer["world"]["wall_R"] = self.__add_wall(
-            robot_diagram_builder, -0.8, 0.0, 1.0, 0.2, 2.0, 2.0, "wall_R"
-        )
+        # index_buffer["world"]["wall_R"] = self.__add_wall(
+        #     robot_diagram_builder, -0.8, 0.0, 1.0, 0.2, 2.0, 2.0, "wall_R"
+        # )
         index_buffer["world"]["wall_L"] = self.__add_wall(
             robot_diagram_builder, 0.8, 0.0, 1.0, 0.2, 2.0, 2.0, "wall_L"
         )

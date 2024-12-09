@@ -41,31 +41,48 @@ class MediapipePosePlotter:
             try:
                 # frame: FrameIDL = self.readers.frame()
                 hands: MediapipeIDL = self.readers.mediapipe_pose()
-
-                pointcloud = hands.points
-                pointcloud[~hands.mask] = np.nan
-
-                mask = PointClouds.forward_project(
-                    pointcloud, hands.intrinsics, hands.extrinsics
-                )
-
                 img = hands.color
-                img[mask] = np.array(hex2rgb(UGENT.BLUE))
-                img = self.add_landmarks(img, hands.landmarks)
 
+                uv = hands.uv[~np.any(np.isnan(hands.uv), axis=-1)]
+                for u, v in uv:
+                    img = cv2.circle(
+                        img,
+                        (int(u), int(v)),
+                        radius=5,
+                        color=hex2rgb(UGENT.GREEN),
+                        thickness=-1,
+                    )
                 self.web_streamer.update_frame(img[..., ::-1])
+
+                # pointcloud = hands.points
+                # pointcloud[~hands.mask] = np.nan
+                #
+                # mask = PointClouds.forward_project(
+                #     pointcloud, hands.intrinsics, hands.extrinsics
+                # )
+                #
+                # img = hands.color
+                # img[mask] = np.array(hex2rgb(UGENT.BLUE))
+                # img = self.add_landmarks(img, hands.landmarks)
+                #
+                # self.web_streamer.update_frame(img[..., ::-1])
 
             except ContinueException:
                 pass
             finally:
                 self.participant.sleep()
 
-    def add_landmarks(self, img: np.ndarray, landmarks: np.ndarray):
-        for landmark in landmarks[[16,18,20,22]]:
-            img = cv2.circle(img, (int(landmark[0]), int(landmark[1])), radius=5,
-                             color=hex2rgb(UGENT.GREEN), thickness=-1)
-
-        return img
+    # def add_landmarks(self, img: np.ndarray, landmarks: np.ndarray):
+    #     for landmark in landmarks[[16, 18, 20, 22]]:
+    #         img = cv2.circle(
+    #             img,
+    #             (int(landmark[0]), int(landmark[1])),
+    #             radius=5,
+    #             color=hex2rgb(UGENT.GREEN),
+    #             thickness=-1,
+    #         )
+    #
+    #     return img
 
 
 if __name__ == "__main__":

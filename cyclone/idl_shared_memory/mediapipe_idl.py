@@ -12,8 +12,11 @@ class MediapipeIDL(BaseIDL):
     extrinsics: np.ndarray = np.empty((4, 4), dtype=np.float64)
     intrinsics: np.ndarray = np.empty((3, 3), dtype=np.float64)
 
-    mask: np.ndarray = np.empty((480, 848), dtype=np.bool_)
-    centroid_uv: np.ndarray = np.empty((2,), dtype=np.int32)
-    centroid_xyz: np.ndarray = np.empty((3,), dtype=np.float32)
-    right_handedness: np.ndarray = np.empty((1,), dtype=np.bool_)
-    landmarks: np.ndarray = np.empty((33, 2), dtype=np.float32)
+    uv: np.ndarray = np.empty((8, 2), dtype=np.float32)
+    xyz: np.ndarray = np.empty((8, 3), dtype=np.float32)
+
+    # mask: np.ndarray = np.empty((480, 848), dtype=np.bool_)
+    # centroid_uv: np.ndarray = np.empty((2,), dtype=np.int32)
+    # centroid_xyz: np.ndarray = np.empty((3,), dtype=np.float32)
+    # right_handedness: np.ndarray = np.empty((1,), dtype=np.bool_)
+    # landmarks: np.ndarray = np.empty((33, 2), dtype=np.float32)

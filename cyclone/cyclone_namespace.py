@@ -22,3 +22,6 @@ class CYCLONE_NAMESPACE:
     YOLO = "yolo"
 
     KALMAN_OBJECTS = "kalman.objects"
+    KALMAN_HANDS = "kalman.hands"
+
+    TARGET_OBJECT = "procedures.target_object"

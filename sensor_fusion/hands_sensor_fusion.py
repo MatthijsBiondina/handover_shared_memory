@@ -1,46 +1,43 @@
-import time
-from statistics import covariance
 from typing import List
 
 import numpy as np
-import torch
 
+from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import ContinueException, BreakException
 from cantrips.logging.logger import get_logger
-from computer_vision.pointclouds import PointClouds
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl.sensor_fusion.kalman_sample import KalmanSample
-from cyclone.idl_shared_memory.yolo_idl import YOLOIDL
+from cyclone.idl_shared_memory.mediapipe_idl import MediapipeIDL
 from cyclone.patterns.ddswriter import DDSWriter
 from cyclone.patterns.sm_reader import SMReader
+
+logger = get_logger()
 
 
 class Readers:
     def __init__(self, participant: CycloneParticipant):
-        self.yolo = SMReader(
-            domain_participant=participant,
-            topic_name=CYCLONE_NAMESPACE.YOLO,
-            idl_dataclass=YOLOIDL(),
+        self.hands = SMReader(
+            participant,
+            topic_name=CYCLONE_NAMESPACE.MEDIAPIPE_POSE,
+            idl_dataclass=MediapipeIDL(),
         )
 
 
 class Writers:
     def __init__(self, participant: CycloneParticipant):
-        self.kalman = DDSWriter(
+        self.hand_centroids = DDSWriter(
             domain_participant=participant,
-            topic_name=CYCLONE_NAMESPACE.KALMAN_OBJECTS,
+            topic_name=CYCLONE_NAMESPACE.KALMAN_HANDS,
             idl_dataclass=KalmanSample,
         )
 
-logger = get_logger()
 
-class KalmanYOLO:
-    CONFIDENCE_THRESHOLD = 0.2
-    MEASUREMENT_ERROR_STD = 0.05
-    MAHALANOBIS_THRESHOLD = 1
-    MOTION_NOISE_STD = 0.1
+class KalmanHands:
+    MOTION_NOISE_STD = 0.5
     MAX_UNCERTAINTY = 1.0
+    MEASUREMENT_ERROR_STD = 0.1
+    MAHALANOBIS_THRESHOLD = 1
 
     def __init__(self, participant: CycloneParticipant):
         self.participant = participant
@@ -51,55 +48,45 @@ class KalmanYOLO:
         self.mean: List[np.ndarray] = []
         self.covariance: List[np.ndarray] = []
 
-        logger.warning(f"YoloSensorFusion: Ready!")
+        logger.warning(f"KalmanHands: Ready!")
 
     def run(self):
         while True:
             try:
-                yolo_sample: YOLOIDL = self.readers.yolo()
-                if yolo_sample.timestamp <= self.timestamp:
+                sample: MediapipeIDL = self.readers.hands()
+                if sample is None:
                     raise ContinueException
-                else:
-                    dt = yolo_sample.timestamp - self.timestamp
-                    self.timestamp = yolo_sample.timestamp
-
-                y = self.preprocess_measurement(yolo_sample)
+                if sample.timestamp <= self.timestamp:
+                    raise ContinueException
+                dt = sample.timestamp - self.timestamp
+                self.timestamp = sample.timestamp
+                y = self.preprocess_measurement(sample)
 
                 self.motion_update(dt)
                 self.add_new_measurements(y)
                 self.landmark_association()
 
                 msg = KalmanSample(
-                    timestamp=yolo_sample.timestamp,
+                    timestamp=sample.timestamp,
                     mean=[mu.tolist() for mu in self.mean],
                     covariance=[Sigma.tolist() for Sigma in self.covariance],
                 )
-                self.writers.kalman(msg)
+                self.writers.hand_centroids(msg)
             except ContinueException:
                 pass
             finally:
                 self.participant.sleep()
 
-    def preprocess_measurement(self, yolo_sample: YOLOIDL):
-        objects = yolo_sample.objects
-        measurements = objects[~np.any(np.isnan(objects), axis=1)]
-        measurements = measurements[measurements[:, -1] > self.CONFIDENCE_THRESHOLD]
-
-        u = (measurements[:, 0] + measurements[:, 2]) / 2
-        v = (measurements[:, 1] + measurements[:, 3]) / 2
-
-        uv = np.stack((u, v), axis=1)
-        if uv.shape[0] == 0:
-            return np.empty((0, 3))
-
-        xyz = PointClouds.uv2xyz(uv, yolo_sample.depth, yolo_sample.points)
-        return xyz
+    def preprocess_measurement(self, sample: MediapipeIDL):
+        hands = sample.xyz
+        mask = ~np.any(np.isnan(hands), axis=1)
+        return hands[mask]
 
     def motion_update(self, dt: float):
         R = np.eye(3) * (self.MOTION_NOISE_STD * dt) ** 2
         for idx in range(len(self.mean)):
             self.covariance[idx] += R
-        for idx in range(len(self.mean)-1, -1, -1):
+        for idx in range(len(self.mean) - 1, -1, -1):
             if np.any(np.diag(self.covariance[idx]) < self.MAX_UNCERTAINTY**2):
                 del self.covariance[idx]
                 del self.mean[idx]
@@ -119,11 +106,8 @@ class KalmanYOLO:
                             continue
                         association = self.associate_keypoints(idxA, idxB)
                         if association:
-                            mu, Sigma = association
-                            self.mean[idxA] = mu
-                            self.covariance[idxA] = Sigma
-                            del self.mean[idxB]
-                            del self.covariance[idxB]
+                            self.mean[idxA], self.covariance[idxA] = association
+                            del self.mean[idxB], self.covariance[idxB]
                             raise BreakException
             except BreakException:
                 modified_flag = True
@@ -131,7 +115,7 @@ class KalmanYOLO:
                 modified_flag = False
 
     def associate_keypoints(self, idxA: int, idxB: int):
-        # Equality measurement
+        # Equaity measurement
         mu = np.concatenate((self.mean[idxA], self.mean[idxB]), axis=0)[:, None]
         Sigma = np.eye(6)
         Sigma[:3, :3] = self.covariance[idxA]
@@ -158,7 +142,6 @@ class KalmanYOLO:
 
 
 if __name__ == "__main__":
-    with torch.no_grad():
-        participant = CycloneParticipant()
-        node = KalmanYOLO(participant)
-        node.run()
+    participant = CycloneParticipant()
+    node = KalmanHands(participant)
+    node.run()
