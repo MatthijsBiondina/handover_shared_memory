@@ -4,12 +4,14 @@ from cyclonedds.domain import DomainParticipant
 
 from cantrips.configs import load_config
 from cantrips.exceptions import WaitingForFirstMessageException
+from cantrips.logging.logger import get_logger
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl_shared_memory.frame_idl import FrameIDL
 from cyclone.patterns.sm_reader import SMReader
 from visualization.webimagestreamer import WebImageStreamer
 
+logger = get_logger()
 
 class Readers:
     def __init__(self, participant: DomainParticipant):

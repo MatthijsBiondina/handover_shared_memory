@@ -68,9 +68,9 @@ class Requester:
         )
 
         # Send a status request
-        DataWriter(self.participant, status_request_topic).write(
-            RPCStatus.Request(time.time())
-        )
+        writer = DataWriter(self.participant, status_request_topic)
+        time.sleep(1)
+        writer.write(RPCStatus.Request(time.time()))
 
         # Wait for a response within the deadline
         reader = DataReader(
@@ -78,6 +78,7 @@ class Requester:
         )
         t_start = time.time()
         while time.time() < t_start + deadline:
+            time.sleep(0.1)
             if len(reader.take()):
                 return
 

@@ -15,3 +15,4 @@ class CycloneParticipant(DomainParticipant):
         dt = time.time() - self.__T
         if dt < 1 / self.RATE_HZ:
             time.sleep(1 / self.RATE_HZ - dt)
+        self.__T = time.time()

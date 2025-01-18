@@ -1,8 +1,7 @@
-from cyclonedds.domain import DomainParticipant
+import os
+import shutil
 
-from cyclone.pubsub_pattern.publisher import Publisher
-
-
-def main():
-    participant = DomainParticipant()
-    publisher = Publisher(participant)
+for root, dirs, files in os.walk("."):
+    for d in dirs:
+        if d == "__pycache__":
+            shutil.rmtree(os.path.join(root, d))

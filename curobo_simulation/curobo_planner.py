@@ -21,9 +21,9 @@ class CuroboPlanner(CuroboServer):
     def __init__(self, participant: CycloneParticipant):
         super(CuroboPlanner, self).__init__(participant)
         self.mpc_solver, self.mpc_goal_buffer = self.init_mpc()
-        self.motion_gen = self.init_motion_gen()
+        self.motion_gen = self.init_motion_gen()  # here it fucks up ethernet
 
-        logger.warning("CuroboPlanner: Ready!")
+        logger.info("CuroboPlanner: Ready!")
 
     def run(self):
         while True:
@@ -32,18 +32,17 @@ class CuroboPlanner(CuroboServer):
                 new_goal = self.get_goal()
 
                 if isinstance(new_goal, JointConfigurationSample):
-                    logger.warning("Planning to Joint-State")
                     self.plan_to_joint_configuration(
                         current_state, np.array(new_goal.pose)
                     )
-                    logger.warning("Planning to Joint-State: Done!")
                 else:
                     self.servo_to_tcp_pose(current_state, np.array(new_goal.pose))
 
             except WaitingForFirstMessageException:
                 pass
             except AttributeError as e:
-                logger.error(str(e))
+                pass
+                # logger.error(str(e))
             finally:
                 self.participant.sleep()
 

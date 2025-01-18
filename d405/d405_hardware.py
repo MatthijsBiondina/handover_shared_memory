@@ -47,7 +47,7 @@ class D405:
 
         self.pipeline, self.align, self.T_cam_ee, self.intrinsics = self.__init_d405()
 
-        logger.warning("D405: Ready!")
+        logger.info("D405: Ready!")
 
     def __init_d405(self):
         pipeline = rs2.pipeline()
@@ -77,12 +77,15 @@ class D405:
         ppy = intrinsics_object.ppy
         intrinsics_matrix = np.array(
             [
-                [fx, 0.0, ppx],
-                [0.0, fy, ppy],
+                [fy, 0.0, ppy],
+                [0.0, fx, 848-ppx],
                 [0.0, 0.0, 1.0],
             ]
         )
-        extrinsics = np.load(T_CAM_EE_path)
+        try:
+            extrinsics = np.load(T_CAM_EE_path)
+        except FileNotFoundError:
+            extrinsics = np.eye(4)
         return pipeline, align, extrinsics, intrinsics_matrix
 
     def run(self):
@@ -94,8 +97,8 @@ class D405:
                 color_frame = frames.get_color_frame()
                 if not depth_frame or not color_frame:
                     raise WaitingForFirstMessageException
-                depth_image = np.asanyarray(depth_frame.get_data())
-                color_image = np.asanyarray(color_frame.get_data())
+                depth_image = np.asanyarray(depth_frame.get_data()).T[::-1]
+                color_image = np.asanyarray(color_frame.get_data()).transpose(1,0,2)[::-1]
 
                 T_ee_world = np.array(self.readers.tcp_pose().pose)
                 T_cam_world = T_ee_world @ self.T_cam_ee

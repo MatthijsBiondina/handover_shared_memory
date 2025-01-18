@@ -9,6 +9,7 @@ Classes:
 from dataclasses import dataclass
 import numpy as np
 
+from cyclone.defaults import Config
 from cyclone.idl_shared_memory.base_idl import BaseIDL
 
 
@@ -29,9 +30,9 @@ class FrameIDL(BaseIDL):
     # Timestamp of the frame
     timestamp: np.ndarray = np.empty((1,), dtype=np.float64)
     # Color image data (height x width x channels)
-    color: np.ndarray = np.empty((480, 848, 3), dtype=np.uint8)
+    color: np.ndarray = np.empty((Config.height, Config.width, 3), dtype=np.uint8)
     # Depth image data (height x width)
-    depth: np.ndarray = np.empty((480, 848), dtype=np.uint16)
+    depth: np.ndarray = np.empty((Config.height, Config.width), dtype=np.uint16)
     # Extrinsic camera parameters (transformation matrix)
     extrinsics: np.ndarray = np.empty((4, 4), dtype=np.float64)
     # Intrinsic camera parameters (camera matrix)

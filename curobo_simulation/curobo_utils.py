@@ -1,5 +1,6 @@
 import os
 import time
+import traceback
 from pathlib import Path
 
 import yaml
@@ -11,8 +12,11 @@ from curobo.types.robot import RobotConfig
 
 from cantrips.configs import load_config
 from cantrips.debugging.terminal import pyout
+from cantrips.logging.logger import get_logger
 from cyclone.cyclone_participant import CycloneParticipant
 from drake_simulation.drake_client import DrakeClient
+
+logger = get_logger()
 
 
 def load_kinematics():
@@ -40,12 +44,11 @@ def load_robot_config():
 
     return robot_config
 
+
 def load_base_config():
     config = load_config()
 
-    base_config_yaml_path = (
-        Path(os.path.dirname(__file__)) / "configs" / "base_cfg.yml"
-    )
+    base_config_yaml_path = Path(os.path.dirname(__file__)) / "configs" / "base_cfg.yml"
 
     with open(base_config_yaml_path, "r") as f:
         base_cfg = yaml.safe_load(f)
@@ -59,6 +62,6 @@ def load_world_config(participant: CycloneParticipant):
         try:
             time.sleep(1)
             return drake_client.world_config
-        except RuntimeError:
+        except RuntimeError as e:
             pass
     raise RuntimeError("Is Drake Simulator running?")

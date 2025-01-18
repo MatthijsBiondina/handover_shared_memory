@@ -2,6 +2,9 @@ from cyclonedds.qos import Qos, Policy
 from cyclonedds.util import duration
 from sympy.physics.units import millisecond, milli
 
+class Config:
+    height: int=848
+    width: int=480
 
 class CYCLONE_DEFAULTS:
     QOS = Qos(

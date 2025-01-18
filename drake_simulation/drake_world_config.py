@@ -1,6 +1,7 @@
 from typing import Dict, Type
 
 import numpy as np
+
 from pydrake.geometry import Box
 from pydrake.math import RigidTransform
 

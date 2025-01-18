@@ -1,9 +1,17 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CycloneDDS xmlns="https://eclipse.org/CycloneDDS/config">
-  <Domain id="any">
-    <SharedMemory />
-    <General>
-      <AllowMulticast>true</AllowMulticast>
-    </General>
-  </Domain>
+<CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+    <Domain>
+        <General>
+            <!-- <NetworkInterfaceAddress>auto</NetworkInterfaceAddress> -->
+            <AllowMulticast>true</AllowMulticast>
+            <EnableMulticastLoopback>true</EnableMulticastLoopback>
+            <Interfaces>
+                <NetworkInterface name="enxe8ea6a83e2d0" priority="1" multicast="true" />
+            </Interfaces>
+        </General>
+        <Discovery>
+            <ParticipantIndex>auto</ParticipantIndex>
+            <Peers>
+            </Peers>
+        </Discovery>
+    </Domain>
 </CycloneDDS>

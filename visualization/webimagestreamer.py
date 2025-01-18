@@ -2,6 +2,8 @@ import cv2
 from threading import Thread, Lock
 from flask import Flask, Response, render_template_string
 
+from cantrips.logging.logger import get_logger
+
 
 class WebImageStreamer:
     def __init__(self, title="Image Stream", port=5000):
@@ -13,6 +15,17 @@ class WebImageStreamer:
         self.define_routes()
         self.server_thread = Thread(target=self.run_server)
         self.server_thread.daemon = True
+
+        # Suppress Flask startup message
+        import os
+        import logging
+
+        os.environ["FLASK_ENV"] = "production"  # Ensure production mode
+        os.environ["FLASK_APP"] = "webimagestreamer"  # Prevent default Flask warnings
+
+        cli = logging.getLogger("flask.cli")
+        cli.propagate = False
+        
         self.server_thread.start()
 
     def define_routes(self):
@@ -50,7 +63,7 @@ class WebImageStreamer:
                     </head>
                     <body>
                         <div class="container">
-                            <h1>{{ title }}</h1>
+                            
                             <img src="{{ url_for('video_feed') }}">
                         </div>
                     </body>
@@ -68,7 +81,24 @@ class WebImageStreamer:
             )
 
     def run_server(self):
-        self.app.run(host="0.0.0.0", port=self.port, threaded=True)
+        import logging
+        import os
+
+        
+        log = logging.getLogger("werkzeug")
+        log.setLevel(logging.ERROR)
+        log.disabled = True
+
+        # Suppress Flask startup message
+        os.environ["FLASK_ENV"] = "production"  # Ensure production mode
+        os.environ["FLASK_APP"] = "webimagestreamer"  # Set a dummy app name to prevent Flask warnings
+        # os.environ['WERKZEUG_RUN_MAIN'] = 'true'
+
+        # Suppress Flask logging
+        cli = logging.getLogger("flask.cli")
+        cli.propagate = False
+        
+        self.app.run(host="0.0.0.0", port=self.port, threaded=True, use_reloader=False)
 
     def generate_frames(self):
         while True:

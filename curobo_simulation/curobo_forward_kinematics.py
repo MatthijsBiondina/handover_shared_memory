@@ -11,7 +11,7 @@ class CuroboForwardKinematics(CuroboServer):
         super(CuroboForwardKinematics, self).__init__(participant)
         self.participant = CycloneParticipant(participant)
 
-        logger.warning("Curobo Forward Kinematics: Ready!")
+        logger.info("Curobo Forward Kinematics: Ready!")
 
     def run(self):
         while True:

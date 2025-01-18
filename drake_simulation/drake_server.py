@@ -1,29 +1,34 @@
+from cantrips.logging.logger import get_logger
+
+import logging
 import os
 import time
 from pathlib import Path
 
 import numpy as np
+
+time.sleep(1)
 from curobo.cuda_robot_model.cuda_robot_model import CudaRobotModelConfig
 from curobo.types.robot import RobotConfig
 from cyclonedds.domain import DomainParticipant
 from munch import Munch
 
 from cantrips.configs import load_config
-from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import WaitingForFirstMessageException
-from cantrips.logging.logger import get_logger
+
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl.curobo.collision_spheres_sample import CuroboCollisionSpheresSample
 from cyclone.idl.simulation.world_config_rpc_sample import WorldConfigRPC
 from cyclone.idl.ur5e.joint_configuration_sample import JointConfigurationSample
 from cyclone.idl.ur5e.tcp_pose_sample import TCPPoseSample
 from cyclone.patterns.responder import Responder
-from cyclone.patterns.ddswriter import DDSWriter
 from cyclone.patterns.ddsreader import DDSReader
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from drake_simulation.drake_scene import DrakeScene
 
-logger = get_logger()
+
+logger = get_logger("INFO")
+logger.info("Drake Server Imports Finished!")
 
 
 class Readers:
@@ -59,8 +64,6 @@ class DrakeServer:
     def __init__(self, participant: CycloneParticipant):
         self.config = load_config()
 
-
-
         # Simulator Setup
         spheres = self.__init_spheres()
         self.simulator = DrakeScene(spheres)
@@ -75,7 +78,7 @@ class DrakeServer:
             callback=self.__get_world_config,
         )
 
-        logger.warning(f"DrakeServer: Ready!")
+        logger.info(f"DrakeServer: Ready!")
 
     def run(self):
         while True:
@@ -86,14 +89,13 @@ class DrakeServer:
                 self.__update_goal_pose()
             except WaitingForFirstMessageException:
                 pass
-            time.sleep(0.1)
-            # self.participant.sleep()
+            self.participant.sleep()
 
     def __init_spheres(self):
         # Sphere setup
         robot_config_yaml = (
-                Path(os.path.dirname(__file__))
-                / "../curobo_simulation/content/configs/robot/ur5e_robotiq_2f_85.yml"
+            Path(os.path.dirname(__file__))
+            / "../curobo_simulation/content/configs/robot/ur5e_robotiq_2f_85.yml"
         )
         robot_config = RobotConfig(
             CudaRobotModelConfig.from_robot_yaml_file(str(robot_config_yaml))
@@ -103,6 +105,7 @@ class DrakeServer:
 
     def __update_joint_configuration(self):
         joint_configuration_sample = self.readers.joint_configuration()
+
         if joint_configuration_sample is None:
             raise WaitingForFirstMessageException
         self.simulator.joint_state = (
@@ -113,7 +116,6 @@ class DrakeServer:
     def __update_curobo_spheres(self):
         spheres = self.readers.curobo_spheres()
         self.simulator.update_spheres(spheres)
-
 
     def __update_tcp_pose(self):
         tcp_pose_sample = self.readers.tcp_pose()

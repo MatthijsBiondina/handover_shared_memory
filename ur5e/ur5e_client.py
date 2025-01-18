@@ -97,7 +97,7 @@ class Ur5eClient:
         self.idle()
 
     def move_to_tcp_pose(
-        self, target_pose: np.ndarray, wait: bool = False, timeout=5.0
+        self, target_pose: np.ndarray, wait: bool = False, timeout=30.0
     ):
         msg = TCPPoseSample(
             timestamp=time.time(),
@@ -117,7 +117,7 @@ class Ur5eClient:
         return np.all(np.isclose(self.joint_state, joints, atol=0.01))
 
     def is_at_tcp_pose(self, pose: np.ndarray):
-        return np.all(np.isclose(self.tcp_pose, pose, atol=0.01))
+        return np.all(np.isclose(self.tcp_pose, pose, atol=0.05))
 
     def look_at(self, position: np.ndarray, focus: np.ndarray):
         z_axis = focus - position

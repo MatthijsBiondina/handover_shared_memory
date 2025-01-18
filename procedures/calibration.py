@@ -89,7 +89,7 @@ class CalibrationProcedure:
     """
 
     # Starting joint configuration (in degrees)
-    START_JS = [90, -90, 90, 90, 90, 0]
+    START_JS = [90, -90, 90, -90, -90, -90]
     # Path to the extrinsics matrix file
     T_CAM_EE_PATH = f"{os.path.dirname(__file__)}/../d405/extrinsics.npy"
 
@@ -104,7 +104,10 @@ class CalibrationProcedure:
         # Initialize shared memory readers
         self.readers = Readers(domain_participant)
         # Load existing extrinsics matrix
-        self.extrinsics = np.load(self.T_CAM_EE_PATH)
+        try:
+            self.extrinsics = np.load(self.T_CAM_EE_PATH)
+        except FileNotFoundError:
+            self.extrinsics = np.eye(4)
         # Initialize the UR5e robot client
         self.ur5e = Ur5eClient(self.participant)
 
@@ -122,8 +125,8 @@ class CalibrationProcedure:
         # Move robot to the starting joint configuration
         self.ur5e.move_to_joint_configuration(np.deg2rad(self.START_JS), wait=True)
         # Collect frames while moving in a spiral trajectory
-        frames = self.spiral()
-        
+        frames = self.calibration_trajectory()
+
         self.ur5e.move_to_joint_configuration(np.deg2rad(self.START_JS), wait=True)
         # Detect Charuco board poses from the collected frames
         charuco_poses = self.compute_charuco_poses(frames)
@@ -132,81 +135,42 @@ class CalibrationProcedure:
         # Save the new extrinsics matrix
         np.save(self.T_CAM_EE_PATH, new_extrinsics)
 
-    def spiral(self, X=-0.1, Y=0.3, Z_min=0.1, Z_max=0.5, r=0.15, T=10):
-        """
-        Moves the robot in a spiral trajectory and collects frames.
-
-        Args:
-            X (float): X-coordinate center of the spiral.
-            Y (float): Y-coordinate center of the spiral.
-            Z_min (float): Minimum Z-coordinate (start height).
-            Z_max (float): Maximum Z-coordinate (end height).
-            r (float): Radius of the spiral.
-            T (float): Total duration of the spiral motion in seconds.
-
-        Returns:
-            List[FrameIDL]: List of collected frames during the motion.
-        """
-
-        def xyz(t):
-            """
-            Computes the x, y, z coordinates at time t during the spiral motion.
-
-            Args:
-                t (float): Time since the start of the spiral motion.
-
-            Returns:
-                Tuple[float, float, float]: The x, y, z coordinates.
-            """
-            # Normalize progress between 0 and 1
-            progress = np.clip(t, 0, T) / T
-            # Compute angular position (two full rotations)
-            theta = 4 * np.pi * progress
-            # Compute x, y positions based on spiral equation
-            x = X + r * np.cos(theta)
-            y = Y + r * np.sin(theta)
-            # Compute z position descending from Z_max to Z_min
-            z = Z_max - (Z_max - Z_min) * progress
-            return x, y, z
-
-        # Move to the starting position of the spiral
-        x, y, z = xyz(0)
-        self.ur5e.move_to_tcp_pose(
-            np.array(
-                [
-                    [-1.0, 0.0, 0.0, x],
-                    [0.0, 1.0, 0.0, y],
-                    [0.0, 0.0, -1.0, z],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]
-            ),
-            wait=True,
+    def calibration_trajectory(self):
+        frames = []
+        focus = np.array([0.1, 0.5, 0.0])
+        positions = np.array(
+            [
+                [-0.1, 0.6, 0.4],
+                [-0.1, 0.5, 0.4],
+                [-0.1, 0.4, 0.4],
+                [-0.1, 0.3, 0.4],
+                [-0.0, 0.3, 0.4],
+                [+0.1, 0.3, 0.4],
+                [+0.2, 0.3, 0.4],
+                [+0.2, 0.3, 0.3],
+                [+0.1, 0.3, 0.3],
+                [+0.1, 0.4, 0.3],
+                [+0.0, 0.4, 0.3],
+                [-0.1, 0.4, 0.3],
+                [-0.1, 0.5, 0.3],
+                [-0.1, 0.6, 0.3],
+                [-0.1, 0.6, 0.2],
+                [-0.1, 0.5, 0.2],
+                [-0.1, 0.4, 0.2],
+                [-0.0, 0.4, 0.2],
+                [+0.1, 0.4, 0.2],
+                [+0.2, 0.4, 0.2],
+                [+0.15, 0.45, 0.1],
+                [+0.1, 0.45, 0.1],
+            ]
         )
 
-        t0 = time.time()
-        frames = []
-        while time.time() - t0 < T:
-            t = time.time() - t0
-            x, y, z = xyz(t)
-            # Command robot to move to the next position (non-blocking)
-            self.ur5e.move_to_tcp_pose(
-                np.array(
-                    [
-                        [-1.0, 0.0, 0.0, x],
-                        [0.0, 1.0, 0.0, y],
-                        [0.0, 0.0, -1.0, z],
-                        [0.0, 0.0, 0.0, 1.0],
-                    ]
-                ),
-            )
-            # Sleep to allow other DDS participants to process
-            self.participant.sleep()
-            # Get the latest frame from the camera
-            frame: FrameIDL = self.readers.frame()
-            # Ensure the frame is new and append it to the list
-            if frame is not None and (
-                len(frames) == 0 or frame.timestamp[0] > frames[-1].timestamp[0]
-            ):
+        for position in pbar(positions, desc="Collecting Frames"):
+            tcp = self.ur5e.look_at(position, focus)
+            self.ur5e.move_to_tcp_pose(tcp, wait=True)
+            time.sleep(0.1)
+            frame = self.readers.frame()
+            if frame is not None:
                 frames.append(frame)
 
         return frames
@@ -237,10 +201,6 @@ class CalibrationProcedure:
                 # Store the measurement if detection was successful
                 charuco_measurements.append(CharucoMeasurement(charuco_pose, tcp_pose))
 
-        if len(charuco_measurements) < 100:
-            # If not enough measurements were collected, raise an error
-            raise RuntimeError("Cannot see Charuco board well enough.")
-
         return charuco_measurements
 
     def calibrate_extrinsics_matrix(self, measurements: List[CharucoMeasurement]):
@@ -253,21 +213,9 @@ class CalibrationProcedure:
         Returns:
             np.ndarray: The calibrated extrinsics matrix.
         """
-        extrinsics, error = None, np.inf
-        # Progress bar for calibration iterations
-        bar = pbar(range(100), desc="Calibrating")
-        for _ in bar:
-            if error < 0.01:
-                break
-            # Perform one calibration iteration
-            extrinsics_, error_ = self.__calibrate_once(measurements)
-            if error_ < error:
-                # Update the best extrinsics matrix and error
-                extrinsics, error = extrinsics_, error_
-                # Update progress bar description with current error
-                bar.desc = poem(f"Calibrating {error:.3f}")
+        extrinsics, error = self.__calibrate_once(measurements)
 
-        logger.warning(f"Finished calibration with error: {error:.3f}")
+        logger.info(f"Finished calibration with error: {error:.3f}")
 
         return extrinsics
 
@@ -288,35 +236,24 @@ class CalibrationProcedure:
 
         # Shuffle measurements to randomize selection
         shuffle(measurements)
-        # Initialize buffer with first two measurements
-        buffer = measurements[:2]
-        extrinsics, error = None, np.inf
-        # Progress bar over the remaining measurements
-        bar = pbar(range(2, len(measurements)))
-        for ii in bar:
-            # Perform eye-in-hand pose estimation using current buffer and new measurement
-            extrinsics_, error_ = eye_in_hand_pose_estimation(
-                tcp_poses_in_base=[m.tcp_pose for m in buffer]
-                + [measurements[ii].tcp_pose],
-                board_poses_in_camera=[m.charuco_pose for m in buffer]
-                + [measurements[ii].charuco_pose],
-            )
-            if error_ is None:
-                # Skip if estimation failed
-                continue
 
-            if error_ < error:
-                # Update best extrinsics and error
-                error = error_
-                extrinsics = extrinsics_
-                # Add the current measurement to the buffer
-                buffer.append(measurements[ii])
-                # Update progress bar description with current error
-                bar.desc = poem(f"           ({error:.3f})")
-        if len(buffer) >= 10:
-            return extrinsics, error
-        else:
-            return extrinsics, np.inf
+        # Leave one out in case of noisy measurement
+        M = [
+            measurements[:ii] + measurements[ii + 1 :]
+            for ii in range(len(measurements))
+        ]
+        extrinsics, error = None, np.inf
+        for buffer in M:
+            extrinsics_, error_ = eye_in_hand_pose_estimation(
+                tcp_poses_in_base=[m.tcp_pose for m in buffer],
+                board_poses_in_camera=[m.charuco_pose for m in buffer],
+            )
+            if error_ is not None:
+                if error_ < error:
+                    extrinsics = extrinsics_
+                    error = error_
+
+        return extrinsics, error
 
 
 if __name__ == "__main__":

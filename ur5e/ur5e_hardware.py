@@ -173,7 +173,7 @@ class UR5eRobotArm:
         pose = np.array(action_sample.pose)
         dpose = pose - self.sophie.get_joint_configuration()
         if np.absolute(dpose).max() > self.config.max_angular_velocity * self.config.dt:
-            pyout(f"Too aggressive")
+            
             # return self.sophie.get_joint_configuration()
 
             dpose = (

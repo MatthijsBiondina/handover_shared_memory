@@ -1,4 +1,5 @@
 import time
+from pydrake.geometry import Box  # DO NOT REMOVE!
 import numpy as np
 import torch
 from curobo.cuda_robot_model.cuda_robot_model import (
@@ -15,12 +16,12 @@ from torch import tensor
 from cantrips.configs import load_config
 from cantrips.exceptions import WaitingForFirstMessageException
 from cantrips.logging.logger import get_logger, shht
-from curobo_simulation.curobo_utils import (
-    load_kinematics,
-    load_robot_config,
-    load_world_config,
-    load_base_config,
-)
+
+from curobo_simulation.curobo_utils import load_kinematics
+from curobo_simulation.curobo_utils import load_robot_config
+from curobo_simulation.curobo_utils import load_world_config
+from curobo_simulation.curobo_utils import load_base_config
+
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl.curobo.collision_spheres_sample import CuroboCollisionSpheresSample

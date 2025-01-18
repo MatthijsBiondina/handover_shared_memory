@@ -40,7 +40,18 @@ class SMBufferWriteField:
             nbytes (int): The number of bytes in the shared memory buffer.
         """
         # Create a new shared memory block with the given name and size
-        self.shm = shared_memory.SharedMemory(name=name, create=True, size=nbytes)
+        try:
+            self.shm = shared_memory.SharedMemory(
+                name=name,
+                create=True,
+                size=nbytes,
+            )
+        except FileExistsError:
+            self.shm = shared_memory.SharedMemory(
+                name=name,
+                create=False,
+                size=nbytes,
+            )
         # Create a numpy array that uses the shared memory buffer
         self.shared_array = np.ndarray(shape, dtype=dtype, buffer=self.shm.buf)
 

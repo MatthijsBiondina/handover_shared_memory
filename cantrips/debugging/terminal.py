@@ -111,11 +111,11 @@ def pretty_string(message: str, color=None, bold=False, underline=False):
     return ou
 
 
-def poem(string):
-    if len(string) > 20:
-        return string[:20] + "..."
+def poem(string, maxlen=23):
+    if len(string) > maxlen-3:
+        return string[:maxlen-3] + "..."
     else:
-        return string + " " * (23 - len(string))
+        return string + " " * (maxlen - len(string))
 
 
 def pyout(*message, color="PINK"):
