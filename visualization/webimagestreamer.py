@@ -4,6 +4,7 @@ from flask import Flask, Response, render_template_string
 
 from cantrips.logging.logger import get_logger
 
+logger = get_logger()
 
 class WebImageStreamer:
     def __init__(self, title="Image Stream", port=5000):
@@ -25,6 +26,8 @@ class WebImageStreamer:
 
         cli = logging.getLogger("flask.cli")
         cli.propagate = False
+
+        logger.info(f"Flask server \"{title}\" running on port {port}.")
         
         self.server_thread.start()
 

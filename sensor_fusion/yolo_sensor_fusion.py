@@ -51,7 +51,7 @@ class KalmanYOLO:
         self.mean: List[np.ndarray] = []
         self.covariance: List[np.ndarray] = []
 
-        logger.warning(f"YoloSensorFusion: Ready!")
+        logger.info(f"YoloSensorFusion: Ready!")
 
     def run(self):
         while True:

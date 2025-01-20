@@ -36,6 +36,7 @@ class TargetPlotter:
         self.web_streamer = WebImageStreamer(
             title="Focus", port=5005
         )
+        
 
     def run(self):
         while True:

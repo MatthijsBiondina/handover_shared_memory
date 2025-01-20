@@ -4,6 +4,7 @@ import numpy as np
 
 from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import ContinueException
+from cantrips.logging.logger import get_logger
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl.procedures.coordinate_sample import CoordinateSample
@@ -11,6 +12,7 @@ from cyclone.idl.sensor_fusion.kalman_sample import KalmanSample
 from cyclone.patterns.ddsreader import DDSReader
 from cyclone.patterns.ddswriter import DDSWriter
 
+logger = get_logger()
 
 class Readers:
     def __init__(self, participant: CycloneParticipant):
@@ -42,6 +44,7 @@ class TargetObjectChooser:
         self.participant = participant
         self.readers = Readers(participant)
         self.writers = Writers(participant)
+        logger.info("TargetObjectChooser: Ready!")
 
     def run(self):
         while True:

@@ -55,7 +55,7 @@ class YOLOLabeler:
         with open(f"{os.path.dirname(__file__)}/../config/yolo_names.json", "w+") as f:
             json.dump(self.yolo_model.names, f, indent=2)
 
-        logger.warning("YOLOLabeler: Ready!")
+        logger.info("YOLOLabeler: Ready!")
 
     def run(self):
         while True:
@@ -101,7 +101,7 @@ class YOLOLabeler:
         for ii in range(len(objects)):
             try:
                 object_array[ii, :4] = objects[ii]["bbox"]
-                object_array[ii, 4] = objects[ii]["cls"]
+                object_array[ii, 4] = objects[ii]["cls"].item()
                 object_array[ii, 5] = objects[ii]["conf"]
             except IndexError:
                 break

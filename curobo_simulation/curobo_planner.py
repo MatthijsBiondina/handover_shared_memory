@@ -21,7 +21,7 @@ class CuroboPlanner(CuroboServer):
     def __init__(self, participant: CycloneParticipant):
         super(CuroboPlanner, self).__init__(participant)
         self.mpc_solver, self.mpc_goal_buffer = self.init_mpc()
-        self.motion_gen = self.init_motion_gen()  # here it fucks up ethernet
+        self.motion_gen = self.init_motion_gen()
 
         logger.info("CuroboPlanner: Ready!")
 

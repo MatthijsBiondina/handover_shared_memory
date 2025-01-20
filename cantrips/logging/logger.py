@@ -21,7 +21,7 @@ class TruncateAndAlignFormatter(logging.Formatter):
     def format(self, record):
         module = poem(record.module, 20)
         lineno = f"ln{record.lineno:<3}"
-        funcName = poem(record.funcName, 20)
+        funcName = poem(record.funcName, 10)
         level = f"{record.levelname:<7}"
         message = record.getMessage()
         return f"{module} - {lineno} - {funcName} - {level}: {message}"
@@ -65,6 +65,29 @@ def get_logger(level="INFO"):
 
     return logger
 
+
+@contextmanager
+def suppress_all_output():
+    """
+    Context manager to suppress all stdout and stderr output.
+    """
+    # Save original file descriptors for stdout and stderr
+    original_stdout_fd = os.dup(1)
+    original_stderr_fd = os.dup(2)
+    # Open /dev/null
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    try:
+        # Redirect stdout and stderr to /dev/null
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+        yield
+    finally:
+        # Restore original stdout and stderr
+        os.dup2(original_stdout_fd, 1)
+        os.dup2(original_stderr_fd, 2)
+        os.close(devnull)
+        os.close(original_stdout_fd)
+        os.close(original_stderr_fd)
 
 @contextmanager
 def shht():

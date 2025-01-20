@@ -1,19 +1,23 @@
+from dataclasses import dataclass
+from time import time
+from typing import Dict
 import mediapipe
 import numpy as np
 import torch
-from torch import tensor, Tensor
 
 from cantrips.configs import load_config
 from cantrips.exceptions import ContinueException
 from cantrips.logging.logger import get_logger
-from computer_vision.meshgridcache import MeshgridCache
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
-from cyclone.idl_shared_memory.frame_idl import FrameIDL
-from cyclone.idl_shared_memory.mediapipe_idl import MediapipeIDL
+from cyclone.defaults import Config
+from cyclone.idl.mediapipe.hand_sample import HandSample
+from cyclone.idl.procedures.coordinate_sample import CoordinateSample
 from cyclone.idl_shared_memory.points_idl import PointsIDL
+from cyclone.patterns.ddsreader import DDSReader
+from cyclone.patterns.ddswriter import DDSWriter
 from cyclone.patterns.sm_reader import SMReader
-from cyclone.patterns.sm_writer import SMWriter
+from visualization.webimagestreamer import WebImageStreamer
 
 
 class Readers:
@@ -23,126 +27,178 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.D405_POINTCLOUD,
             idl_dataclass=PointsIDL(),
         )
+        self.target = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.TARGET_OBJECT,
+            idl_dataclass=CoordinateSample,
+        )
 
 
 class Writers:
     def __init__(self, participant: CycloneParticipant):
-        self.hand = SMWriter(
+        self.hand = DDSWriter(
             domain_participant=participant,
             topic_name=CYCLONE_NAMESPACE.MEDIAPIPE_HAND,
-            idl_dataclass=MediapipeIDL(),
+            idl_dataclass=HandSample,
         )
 
 
 logger = get_logger()
 
 
+@dataclass
+class Landmark:
+    x: float
+    y: float
+    z: float
+    u: int
+    v: int
+
+
 class MediapipeHands:
+    TRACKED_LANDMARKS = [
+        "THUMB_MCP",
+        "THUMB_IP",
+        "THUMB_TIP",
+        "INDEX_FINGER_MCP",
+        "INDEX_FINGER_PIP",
+        "INDEX_FINGER_DIP",
+        "INDEX_FINGER_TIP",
+        "MIDDLE_FINGER_MCP",
+        "MIDDLE_FINGER_PIP",
+        "MIDDLE_FINGER_DIP",
+        "MIDDLE_FINGER_TIP",
+        "RING_FINGER_MCP",
+        "RING_FINGER_PIP",
+        "RING_FINGER_DIP",
+        "RING_FINGER_TIP",
+        "PINKY_MCP",
+        "PINKY_PIP",
+        "PINKY_DIP",
+        "PINKY_TIP",
+    ]
+
     def __init__(self, domain_participant: CycloneParticipant):
         self.config = load_config()
         self.participant = domain_participant
         self.readers = Readers(domain_participant)
         self.writers = Writers(domain_participant)
 
-        self.mediapipe_hands = mediapipe.solutions.hands
-        self.model = self.mediapipe_hands.Hands()
+        self.mp_draw = mediapipe.solutions.drawing_utils
+        self.mp_hands = mediapipe.solutions.hands
+        self.model = self.mp_hands.Hands(
+            static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5
+        )
+
+        self.web_streamer = WebImageStreamer(title="hand", port=5007)
+
+        logger.info(f"MediapipeHands: Ready!")
 
     def run(self):
         while True:
+            img = np.zeros((Config.height, Config.width, 3), dtype=np.uint8)
             try:
-                frame = self.readers.points()
-                centroid_uv, handedness = self.get_hand_uv(frame)
-                mask, centroid_xyz = self.get_hand_xyz(frame, centroid_uv)
+                points = self.readers.points()
+                if points is not None:
+                    img = points.color
+                target = self.readers.target()
+                if points is None or target is None:
+                    raise ContinueException
 
-                msg = MediapipeIDL(
-                    timestamp=frame.timestamp,
-                    color=frame.color,
-                    depth=frame.depth,
-                    points=frame.points,
-                    extrinsics=frame.extrinsics,
-                    intrinsics=frame.intrinsics,
-                    mask=mask.cpu().numpy().astype(np.bool_),
-                    centroid_uv=centroid_uv.cpu().numpy().astype(np.int32),
-                    centroid_xyz=centroid_xyz.cpu().numpy().astype(np.float32),
-                    right_handedness=np.array([handedness == "Right"])
-                )
-                self.writers.hand(msg)
+                hands = self.get_hand_keypoints(points)
+                hand = self.filter_by_distance(hands, target)
+                self.publish(hand)
+
+                img = self.draw_keypoints(hand, img)
+
             except ContinueException:
                 pass
             finally:
+                self.web_streamer.update_frame(img[..., ::-1])
                 self.participant.sleep()
 
-    def get_hand_uv(self, frame: FrameIDL):
-        results = self.model.process(frame.color)
-        if results.multi_hand_landmarks is None or not results.multi_handedness:
+    def get_hand_keypoints(self, points: PointsIDL):
+        img = points.color
+        h, w, _ = img.shape
+        results = self.model.process(img)
+        if not results.multi_hand_landmarks:
             raise ContinueException
 
-        centroids, handednesses = [], []
-        H, W, _ = frame.color.shape
-        for ii, hand in enumerate(results.multi_hand_landmarks):
-            handedness = results.multi_handedness[ii].classification[0].label
-            
-            if handedness == "Left":# Mediapipe thinks left is right and left is right
-                handedness = "Right"
-            else:
-                handedness = "Left"
-            
-            # Todo: account for left-handed people
-            if not handedness == "Right":
-                raise ContinueException
-            
+        hands = []
+        for hand_landmarks in results.multi_hand_landmarks:
+            hand = {}
+            for landmark in self.TRACKED_LANDMARKS:
+                index = eval(f"self.mp_hands.HandLandmark.{landmark}")
+                u = np.clip(int(round(hand_landmarks.landmark[index].x * w)), 0, w - 1)
+                v = np.clip(int(round(hand_landmarks.landmark[index].y * h)), 0, h - 1)
+                hand[landmark] = Landmark(
+                    x=points.points[v, u, 0],
+                    y=points.points[v, u, 1],
+                    z=points.points[v, u, 2],
+                    u=u,
+                    v=v,
+                )
+            hands.append(hand)
 
-            centroid = np.mean(
-                [(landmark.x, landmark.y) for landmark in hand.landmark], axis=0
-            ) * np.array([W, H])
-            centroids.append(centroid)
-            handednesses.append(handedness)
-        if len(centroids) == 0:
-            raise ContinueException
+        return hands
 
-        depth = tensor(
-            frame.depth.astype(np.float32),
-            dtype=torch.float32,
-            device=self.config.device,
+    def filter_by_distance(
+        self,
+        hands: Dict[str, Landmark],
+        target: CoordinateSample,
+        distance_threshold=0.1,
+    ):
+        D = lambda l: np.linalg.norm(
+            np.array([l.x, l.y, l.z]) - np.array([target.x, target.y, target.z])
         )
-        centroid, distance, handedness = None, np.inf, None
-        for ii, hand in enumerate(centroids):
-            hand = tensor(hand, dtype=torch.float32, device=self.config.device)
-            px_distance = torch.linalg.norm(
-                MeshgridCache().get_meshgrid((H, W)) - hand[None, None, :], dim=-1
-            )
-
-            depth[(depth == 0) | (px_distance > H / 20)] = torch.inf
-            if torch.any(~torch.isinf(depth)):
-                argmin = torch.argmin(depth)
-                u, v = argmin % W, argmin // W
-
-                if depth[v, u] < distance:
-                    centroid = tensor(
-                        [u, v], dtype=torch.float32, device=self.config.device
-                    )
-                    distance = depth[v, u]
-                    handendness = handednesses[ii]
-        if centroid is None:
-            raise ContinueException
-        return centroid, handedness
-
-    def get_hand_xyz(self, frame: FrameIDL, centroid_uv: Tensor):
-        points = tensor(frame.points, dtype=torch.float32, device=self.config.device)
-        u, v = centroid_uv.to(torch.int)
-        centroid_xyz_closest = tensor(
-            points[v, u], dtype=torch.float32, device=self.config.device
+        # Focus on hand closest to target
+        hand = min(
+            hands,
+            key=lambda h: np.nanmedian([D(l) for l in h.values()]),
         )
 
-        mask = (
-            torch.linalg.norm(centroid_xyz_closest - points, dim=-1)
-            < self.config.world_distance_threshold
-        )
-        if not torch.any(mask):
-            raise ContinueException
-        centroid_xyz = torch.nanmedian(points[mask], dim=0).values
+        for key, landmark in hand.items():
+            if D(landmark) < distance_threshold:
+                continue
+            hand[key] = None
 
-        return mask, centroid_xyz
+        return hand
+
+    def publish(self, hand):
+        def map_to_array(landmark: Landmark):
+            if landmark is None:
+                return None
+            return [
+                landmark.x,
+                landmark.y,
+                landmark.z,
+                float(landmark.u),
+                float(landmark.z),
+            ]
+
+        msg = HandSample(
+            timestamp=time(),
+            thumb_mcp=map_to_array(hand.get("THUMB_MCP")),
+            thumb_ip=map_to_array(hand.get("THUMB_IP")),
+            thumb_tip=map_to_array(hand.get("THUMB_TIP")),
+            index_finger_mcp=map_to_array(hand.get("INDEX_FINGER_MCP")),
+            index_finger_pip=map_to_array(hand.get("INDEX_FINGER_PIP")),
+            index_finger_dip=map_to_array(hand.get("INDEX_FINGER_DIP")),
+            index_finger_tip=map_to_array(hand.get("INDEX_FINGER_TIP")),
+            middle_finger_mcp=map_to_array(hand.get("MIDDLE_FINGER_MCP")),
+            middle_finger_pip=map_to_array(hand.get("MIDDLE_FINGER_PIP")),
+            middle_finger_dip=map_to_array(hand.get("MIDDLE_FINGER_DIP")),
+            middle_finger_tip=map_to_array(hand.get("MIDDLE_FINGER_TIP")),
+            ring_finger_mcp=map_to_array(hand.get("RING_FINGER_MCP")),
+            ring_finger_pip=map_to_array(hand.get("RING_FINGER_PIP")),
+            ring_finger_dip=map_to_array(hand.get("RING_FINGER_DIP")),
+            ring_finger_tip=map_to_array(hand.get("RING_FINGER_TIP")),
+            pinky_mcp=map_to_array(hand.get("PINKY_MCP")),
+            pinky_pip=map_to_array(hand.get("PINKY_PIP")),
+            pinky_dip=map_to_array(hand.get("PINKY_DIP")),
+            pinky_tip=map_to_array(hand.get("PINKY_TIP")),
+        )
+        self.writers.hand(msg=msg)
 
 
 if __name__ == "__main__":

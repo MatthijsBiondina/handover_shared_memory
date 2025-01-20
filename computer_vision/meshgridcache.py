@@ -15,7 +15,7 @@ class MeshgridCache:
             u = torch.arange(W, device=device)
             v = torch.arange(H, device=device)
             # Adjust indexing based on PyTorch's meshgrid behavior
-            v_grid, u_grid = torch.meshgrid(v, u)
+            v_grid, u_grid = torch.meshgrid(v, u, indexing="ij")
             self._grids[shape] = torch.stack((u_grid, v_grid), dim=-1)
         return self._grids[shape]
 

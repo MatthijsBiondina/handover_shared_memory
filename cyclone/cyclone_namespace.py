@@ -25,3 +25,5 @@ class CYCLONE_NAMESPACE:
     KALMAN_HANDS = "kalman.hands"
 
     TARGET_OBJECT = "procedures.target_object"
+
+    SAM_MASKS = "sam.masks"

@@ -29,22 +29,27 @@ python -m curobo_simulation.curobo_planner &
 python -m curobo_simulation.curobo_forward_kinematics &
 python -m d405.d405_hardware &
 #
-#python -m computer_vision.pointclouds &
-#python -m computer_vision.mediapipe_pose &
-#python -m computer_vision.yolo_labeler &
+python -m computer_vision.pointclouds &
+python -m computer_vision.mediapipe_pose &
+python -m computer_vision.yolo_labeler &
+# python -m computer_vision.sam &
+
 #
-#python -m sensor_fusion.yolo_sensor_fusion &
-#python -m sensor_fusion.hands_sensor_fusion &
+python -m sensor_fusion.yolo_sensor_fusion &
+python -m sensor_fusion.hands_sensor_fusion &
+
+python -m decisions.select_target_object &
 #
-python -m visualization.d405_plotter &
-##python -m visualization.mediapipeposeplotter &
-##python -m visualization.yoloplotter &
-#python -m visualization.kalmanplotter &
+# python -m visualization.d405_plotter &
+# python -m visualization.mediapipeposeplotter &
+# python -m visualization.yoloplotter &
+# python -m visualization.kalmanplotter &
+# python -m visualization.target_plotter &
 #
-#python -m decisions.select_target_object &
+
 #
 ##python -m procedures.look_at_desk &
-#python -m procedures.approach_object &
+python -m procedures.approach_object &
 
 # Print message indicating background launch
 echo "All scripts are running in the background. Press Ctrl+C to stop."

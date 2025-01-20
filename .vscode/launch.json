@@ -10,7 +10,7 @@
             "type": "python",
             "request": "launch",
             "python": "${command:python.interpreterPath}",
-            "program": "${workspaceFolder}/procedures/calibration.py",
+            "program": "${workspaceFolder}/computer_vision/mediapipe_hands.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {

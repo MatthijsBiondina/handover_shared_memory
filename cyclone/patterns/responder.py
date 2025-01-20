@@ -97,7 +97,7 @@ class Responder:
                 for request in samples:
                     if isinstance(request, InvalidSample):
                         continue
-                    logger.info("Request received.")
+                    # logger.info("Request received.")
 
                     response = self.callback(request)
                     response.timestamp = request.timestamp

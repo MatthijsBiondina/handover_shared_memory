@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import torch
 from torch import tensor
@@ -43,7 +44,7 @@ class PointClouds:
         self.readers = Readers(participant)
         self.writers = Writers(participant)
 
-        logger.warning(f"PointClouds: Ready!")
+        logger.info(f"PointClouds: Ready!")
 
     def run(self):
         while True:

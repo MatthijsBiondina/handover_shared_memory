@@ -48,7 +48,7 @@ class KalmanHands:
         self.mean: List[np.ndarray] = []
         self.covariance: List[np.ndarray] = []
 
-        logger.warning(f"KalmanHands: Ready!")
+        logger.info(f"HandsSensorFusion: Ready!")
 
     def run(self):
         while True:

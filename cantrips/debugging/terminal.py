@@ -112,7 +112,7 @@ def pretty_string(message: str, color=None, bold=False, underline=False):
 
 
 def poem(string, maxlen=23):
-    if len(string) > maxlen-3:
+    if len(string) > maxlen:
         return string[:maxlen-3] + "..."
     else:
         return string + " " * (maxlen - len(string))

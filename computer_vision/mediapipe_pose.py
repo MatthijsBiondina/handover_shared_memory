@@ -70,6 +70,7 @@ class MediapipePose:
 
         self.mediapipe_pose = mp.solutions.pose
         self.model = self.mediapipe_pose.Pose()
+        logger.info("Mediapipe: Ready!")
 
     def run(self):
         while True:

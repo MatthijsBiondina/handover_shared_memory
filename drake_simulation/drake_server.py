@@ -28,7 +28,6 @@ from drake_simulation.drake_scene import DrakeScene
 
 
 logger = get_logger("INFO")
-logger.info("Drake Server Imports Finished!")
 
 
 class Readers:
