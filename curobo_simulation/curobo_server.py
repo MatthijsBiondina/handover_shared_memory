@@ -15,7 +15,7 @@ from torch import tensor
 
 from cantrips.configs import load_config
 from cantrips.exceptions import WaitingForFirstMessageException
-from cantrips.logging.logger import get_logger, shht
+from cantrips.logging.logger import get_logger
 
 from curobo_simulation.curobo_utils import load_kinematics
 from curobo_simulation.curobo_utils import load_robot_config

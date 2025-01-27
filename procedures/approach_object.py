@@ -9,6 +9,7 @@ from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl.curobo.collision_spheres_sample import CuroboCollisionSpheresSample
 from cyclone.idl.procedures.coordinate_sample import CoordinateSample
+from cyclone.idl.ur5e.tcp_pose_sample import TCPPoseSample
 from cyclone.patterns.ddsreader import DDSReader
 from ur5e.ur5e_client import Ur5eClient
 
@@ -27,10 +28,15 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.TARGET_OBJECT,
             idl_dataclass=CoordinateSample,
         )
+        self.grasp = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.GRASP_TCP_POSE,
+            idl_dataclass=TCPPoseSample,
+        )
 
 
 class ApproachObjectProcedure:
-    START_JS = [170, -100, 30, 90, 90, 0]
+    START_JS = [180, -180, 90, 90, 90, 0]
     PATIENCE = 10
 
     def __init__(self, domain_participant: CycloneParticipant):
@@ -45,30 +51,52 @@ class ApproachObjectProcedure:
         self.ur5e.move_to_joint_configuration(np.deg2rad(self.START_JS), wait=True)
         tcp_rest = self.ur5e.tcp_pose
 
-        tcp_look = np.array(
-            [
-                [0.0, 0.0, -1.0, -0.75],
-                [-1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.5],
-                [0.0, 0.0, 0.0, 1.0],
-            ]
-        )
+        grasp_timestamp, grasp_tcp = None, None
 
         while True:
             try:
-                self.ur5e.move_to_tcp_pose(tcp_look)
-                # target = self.readers.target()
-                # if (
-                #     target is None
-                #     or time.time() > target.timestamp + self.PATIENCE
-                #     or target.z < 0.5
-                # ):
+                if not grasp_timestamp is None:
+                    if time.time() - grasp_timestamp > self.PATIENCE:
+                        grasp_timestamp = None
+                        grasp_tcp = None
+
+                if grasp_tcp is not None:
+                    self.ur5e.move_to_tcp_pose(grasp_tcp)
+                    raise ContinueException
+
+                tgt: CoordinateSample = self.readers.target()
+                if tgt is None or tgt.timestamp < time.time() - self.PATIENCE:
+                    self.ur5e.move_to_tcp_pose(target_pose=tcp_rest)
+                    raise ContinueException
+                if not (0 > tgt.x > -1 and -0.5 < tgt.y < 0.5 and tgt.z > 0.2):
+                    self.ur5e.move_to_tcp_pose(target_pose=tcp_rest)
+                    raise ContinueException
+
+                T = np.array([tgt.x, tgt.y, tgt.z])
+                X = T.copy()
+                X[:2] = T[:2] - 0.2 * (T[:2] / np.linalg.norm(T[:2]))
+                tcp = self.ur5e.look_at(X, T)
+                if self.ur5e.is_at_tcp_pose(tcp, pos_tol=0.02):
+                    grasp: TCPPoseSample = self.readers.grasp()
+                    if grasp is not None and time.time() - grasp.timestamp < 5:
+                        grasp_timestamp = time.time()
+                        grasp_tcp = np.array(grasp.pose)
+
+                self.ur5e.move_to_tcp_pose(target_pose=tcp)
+
+                # grasp: TCPPoseSample = self.readers.grasp()
+                # if grasp is None or grasp.timestamp < time.time() - 10:
                 #     self.ur5e.move_to_tcp_pose(target_pose=tcp_rest)
+                #     raise ContinueException
+
+                # grasp_tcp = np.array(grasp.pose)
+                # x = grasp_tcp[0, 3]
+                # y = grasp_tcp[1, 3]
+                # z = grasp_tcp[2, 3]
+                # if -1 < x < 0 and -0.5 < y < 0.5 and z > 0.2:
+                #     self.ur5e.move_to_tcp_pose(target_pose=grasp_tcp)
                 # else:
-                #     object_pose = np.array([target.x, target.y, target.z])
-                #     gripper_pose = object_pose - np.array([-0.2, 0.0, 0.0])
-                #     tcp = self.ur5e.look_at(gripper_pose, object_pose)
-                #     self.ur5e.move_to_tcp_pose(target_pose=tcp)
+                #     self.ur5e.move_to_tcp_pose(target_pose=tcp_rest)
 
             except ContinueException:
                 pass

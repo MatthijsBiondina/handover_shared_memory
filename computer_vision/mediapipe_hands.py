@@ -46,6 +46,24 @@ class Writers:
 logger = get_logger()
 
 
+HAND_CONNECTIONS = [
+    ("thumb_mcp", "thumb_ip"),
+    ("thumb_ip", "thumb_tip"),
+    ("index_finger_mcp", "index_finger_pip"),
+    ("index_finger_pip", "index_finger_dip"),
+    ("index_finger_dip", "index_finger_tip"),
+    ("middle_finger_mcp", "middle_finger_pip"),
+    ("middle_finger_pip", "middle_finger_dip"),
+    ("middle_finger_dip", "middle_finger_tip"),
+    ("ring_finger_mcp", "ring_finger_pip"),
+    ("ring_finger_pip", "ring_finger_dip"),
+    ("ring_finger_dip", "ring_finger_tip"),
+    ("pinky_mcp", "pinky_pip"),
+    ("pinky_pip", "pinky_dip"),
+    ("pinky_dip", "pinky_tip"),
+]
+
+
 @dataclass
 class Landmark:
     x: float
@@ -90,17 +108,12 @@ class MediapipeHands:
             static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5
         )
 
-        self.web_streamer = WebImageStreamer(title="hand", port=5007)
-
         logger.info(f"MediapipeHands: Ready!")
 
     def run(self):
         while True:
-            img = np.zeros((Config.height, Config.width, 3), dtype=np.uint8)
             try:
                 points = self.readers.points()
-                if points is not None:
-                    img = points.color
                 target = self.readers.target()
                 if points is None or target is None:
                     raise ContinueException
@@ -109,12 +122,9 @@ class MediapipeHands:
                 hand = self.filter_by_distance(hands, target)
                 self.publish(hand)
 
-                img = self.draw_keypoints(hand, img)
-
             except ContinueException:
                 pass
             finally:
-                self.web_streamer.update_frame(img[..., ::-1])
                 self.participant.sleep()
 
     def get_hand_keypoints(self, points: PointsIDL):
@@ -173,7 +183,7 @@ class MediapipeHands:
                 landmark.y,
                 landmark.z,
                 float(landmark.u),
-                float(landmark.z),
+                float(landmark.v),
             ]
 
         msg = HandSample(

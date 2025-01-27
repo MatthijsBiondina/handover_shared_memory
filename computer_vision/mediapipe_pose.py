@@ -105,32 +105,6 @@ class MediapipePose:
                     xyz=xyz
                 )
                 self.writers.pose(msg)
-
-
-                # hands, handednesses = self.get_hands(results, frame.color.shape)
-                # centroid_uv, handedness = self.get_closest_hand_centroid(
-                #     hands, handednesses, frame.depth
-                # )
-                # if centroid_uv is None:
-                #     continue
-                # mask, centroid_xyz = self.calculate_centroid_xyz(
-                #     centroid_uv, frame.points
-                # )
-                #
-                # msg = MediapipeIDL(
-                #     timestamp=frame.timestamp,
-                #     color=frame.color,
-                #     depth=frame.depth,
-                #     points=frame.points,
-                #     extrinsics=frame.extrinsics,
-                #     intrinsics=frame.intrinsics,
-                #     mask=mask.cpu().numpy().astype(np.bool_),
-                #     centroid_uv=centroid_uv.cpu().numpy().astype(np.int32),
-                #     centroid_xyz=centroid_xyz.cpu().numpy().astype(np.float32),
-                #     right_handedness=np.array([handedness == "Right"]),
-                #     landmarks=landmarks.astype(np.float32),
-                # )
-                # self.writers.pose(msg)
             except ContinueException:
                 pass
             finally:

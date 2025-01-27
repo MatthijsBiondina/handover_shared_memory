@@ -15,12 +15,15 @@ def makedirs(path: Union[str, Path]):
     else:
         parts = path.split("/")
 
-    pth = Path(parts[0])
-    os.makedirs(pth, exist_ok=True)
+    if parts[0] == '':
+        pth = Path("/")
+    else:
+        pth = Path(parts[0])
+        os.makedirs(pth, exist_ok=True)
     for folder in parts[1:]:
         pth /= folder
         os.makedirs(pth, exist_ok=True)
-    pyout(f"mk >> {os.path.abspath(path)}", color="BLUE")
+    # pyout(f"mk >> {os.path.abspath(path)}", color="BLUE")
 
 def listdir(path: Union[str, Path]):
     filenames = sorted(os.listdir(path))

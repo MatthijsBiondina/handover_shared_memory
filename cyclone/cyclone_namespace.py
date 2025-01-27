@@ -27,3 +27,5 @@ class CYCLONE_NAMESPACE:
     TARGET_OBJECT = "procedures.target_object"
 
     SAM_MASKS = "sam.masks"
+
+    GRASP_TCP_POSE = "grasp.tcp_pose"

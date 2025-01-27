@@ -7,10 +7,10 @@
         
         {
             "name": "Python Debugger",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "python": "${command:python.interpreterPath}",
-            "program": "${workspaceFolder}/computer_vision/mediapipe_hands.py",
+            "program": "${workspaceFolder}/visualization/sam_plotter.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {

@@ -4,13 +4,15 @@ from contextlib import contextmanager
 from pathlib import Path
 from time import time
 import numpy as np
-
 import yaml
 import os
 
 from cantrips.configs import load_config
 from cantrips.debugging.terminal import poem
 
+# ANSI escape codes
+BOLD = '\033[1m'
+RESET = '\033[0m'
 
 class TruncateAndAlignFormatter(logging.Formatter):
     def __init__(self, *args, max_module_length=20, max_func_length=20, **kwargs):
@@ -24,7 +26,24 @@ class TruncateAndAlignFormatter(logging.Formatter):
         funcName = poem(record.funcName, 10)
         level = f"{record.levelname:<7}"
         message = record.getMessage()
-        return f"{module} - {lineno} - {funcName} - {level}: {message}"
+        # Add bold formatting to the entire log message
+        return f"{BOLD}{module} - {lineno} - {funcName} - {level}: {message}{RESET}"
+
+
+class BoldStreamHandler(logging.StreamHandler):
+    def __init__(self):
+        super().__init__()
+        # Check if the output stream supports ANSI codes
+        self.supports_color = hasattr(self.stream, 'isatty') and self.stream.isatty()
+
+    def format(self, record):
+        # Only add ANSI codes if the stream supports them
+        if self.supports_color:
+            return super().format(record)
+        else:
+            # Strip ANSI codes if not supported
+            msg = super().format(record)
+            return msg.replace(BOLD, '').replace(RESET, '')
 
 
 def get_logger(level="INFO"):
@@ -40,23 +59,22 @@ def get_logger(level="INFO"):
 
     logger = logging.getLogger(basename)
 
-    # Check if handlers are already added
     if logger.hasHandlers():
-        # Ensure logger level is set correctly if reusing
         logger.setLevel(eval(f"logging.{level}"))
         return logger
 
-    handlers = [logging.StreamHandler()]
+    # Use BoldStreamHandler instead of regular StreamHandler
+    handlers = [BoldStreamHandler()]
     if config.file_logging:
-        handlers.append(logging.FileHandler(Path(config.filepath) / log_filename))
+        # File handler doesn't need ANSI codes
+        file_handler = logging.FileHandler(Path(config.filepath) / log_filename)
+        handlers.append(file_handler)
 
-    # Define the truncation and alignment formatter
     formatter = TruncateAndAlignFormatter(
         max_module_length=20, 
         max_func_length=20
     )
 
-    # Assign the formatter to each handler and add handlers to the logger
     for handler in handlers:
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -64,37 +82,3 @@ def get_logger(level="INFO"):
     logger.setLevel(eval(f"logging.{level}"))
 
     return logger
-
-
-@contextmanager
-def suppress_all_output():
-    """
-    Context manager to suppress all stdout and stderr output.
-    """
-    # Save original file descriptors for stdout and stderr
-    original_stdout_fd = os.dup(1)
-    original_stderr_fd = os.dup(2)
-    # Open /dev/null
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    try:
-        # Redirect stdout and stderr to /dev/null
-        os.dup2(devnull, 1)
-        os.dup2(devnull, 2)
-        yield
-    finally:
-        # Restore original stdout and stderr
-        os.dup2(original_stdout_fd, 1)
-        os.dup2(original_stderr_fd, 2)
-        os.close(devnull)
-        os.close(original_stdout_fd)
-        os.close(original_stderr_fd)
-
-@contextmanager
-def shht():
-    logger = logging.getLogger()
-    previous_level = logger.getEffectiveLevel()
-    logger.setLevel(logging.WARNING)
-    try:
-        yield
-    finally:
-        logger.setLevel(previous_level)

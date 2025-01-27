@@ -2,6 +2,7 @@ import time
 
 import numpy as np
 from cyclonedds.domain import DomainParticipant
+import scipy
 from spatialmath.base import transl
 
 from cantrips.debugging.terminal import pyout
@@ -49,7 +50,7 @@ class Ur5eClient:
         self.writers = Writers(participant)
         self.idle(1.0)
 
-    def idle(self, duration: float=0.5):
+    def idle(self, duration: float = 0.5):
         t0 = time.time()
         while time.time() - t0 < duration:
             self.move_to_tcp_pose(self.tcp_pose)
@@ -116,14 +117,44 @@ class Ur5eClient:
     def is_at_joint_state(self, joints: np.ndarray):
         return np.all(np.isclose(self.joint_state, joints, atol=0.01))
 
-    def is_at_tcp_pose(self, pose: np.ndarray):
-        return np.all(np.isclose(self.tcp_pose, pose, atol=0.05))
+    def is_at_tcp_pose(self, pose: np.ndarray, pos_tol=0.01, rot_tol=5.0):
+        """
+        Check if current TCP pose is close to target pose.
+
+        Args:
+            pose: Target pose as 4x4 homogeneous transformation matrix
+            pos_tol: Position tolerance in meters (default: 1cm)
+            rot_tol: Rotation tolerance in degrees (default: 5 degrees)
+
+        Returns:
+            bool: True if current pose is within tolerances
+        """
+        # Extract current position and rotation
+        curr_pos = self.tcp_pose[:3, 3]
+        curr_rot = self.tcp_pose[:3, :3]
+
+        # Extract target position and rotation
+        target_pos = pose[:3, 3]
+        target_rot = pose[:3, :3]
+
+        # Check position difference (Euclidean distance)
+        pos_diff = np.linalg.norm(curr_pos - target_pos)
+
+        # Convert rotation matrices to Rotation objects and get angular difference
+        curr_r = scipy.spatial.transform.Rotation.from_matrix(curr_rot)
+        target_r = scipy.spatial.transform.Rotation.from_matrix(target_rot)
+        rot_diff = np.abs(
+            scipy.spatial.transform.Rotation.magnitude(curr_r.inv() * target_r)
+        )
+        rot_diff_deg = np.degrees(rot_diff)
+
+        return pos_diff <= pos_tol and rot_diff_deg <= rot_tol
 
     def look_at(self, position: np.ndarray, focus: np.ndarray):
         z_axis = focus - position
         z_axis = z_axis / np.linalg.norm(z_axis)
 
-        x_axis = np.cross(np.array([0.,0.,1.]), z_axis)
+        x_axis = np.cross(np.array([0.0, 0.0, 1.0]), z_axis)
         x_axis = x_axis / np.linalg.norm(x_axis)
 
         y_axis = np.cross(z_axis, x_axis)

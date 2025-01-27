@@ -5,7 +5,7 @@
             <AllowMulticast>true</AllowMulticast>
             <EnableMulticastLoopback>true</EnableMulticastLoopback>
             <Interfaces>
-                <NetworkInterface name="enxe8ea6a83e2d0" priority="1" multicast="true" />
+                <NetworkInterface name="lo" priority="1" multicast="true" />
             </Interfaces>
         </General>
         <Discovery>

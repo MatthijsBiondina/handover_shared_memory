@@ -1,11 +1,12 @@
 import time
+import cv2
 import numpy as np
 import torch
 from torch import tensor
 from torch.cuda import device
 
 from cantrips.configs import load_config
-from cantrips.debugging.terminal import pyout
+from cantrips.debugging.terminal import UGENT, hex2rgb, pyout
 from cantrips.logging.logger import get_logger
 from computer_vision.meshgridcache import MeshgridCache
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
@@ -49,8 +50,9 @@ class PointClouds:
     def run(self):
         while True:
             frame = self.readers.d405()
+            masked_depth = self.apply_finger_mask(frame)
             pointcloud = self.back_project(
-                frame.depth, frame.intrinsics, frame.extrinsics
+                masked_depth, frame.intrinsics, frame.extrinsics
             )
             self.writers.points(
                 PointsIDL(
@@ -64,6 +66,12 @@ class PointClouds:
             )
 
             self.participant.sleep()
+
+    def apply_finger_mask(self, frame: FrameIDL):
+        depth = frame.depth
+        depth[:200, :50] = 0
+        depth[:200, -50:] = 0
+        return depth
 
     @staticmethod
     def back_project(

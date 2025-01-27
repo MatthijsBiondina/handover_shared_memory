@@ -1,0 +1,229 @@
+import time
+import numpy as np
+import torch
+from torch import Tensor, tensor
+from cantrips.exceptions import ContinueException
+from cantrips.logging.logger import get_logger
+from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
+from cyclone.cyclone_participant import CycloneParticipant
+from cyclone.idl.ur5e.tcp_pose_sample import TCPPoseSample
+from cyclone.idl_shared_memory.masks_idl import MasksIDL
+from cyclone.patterns.ddsreader import DDSReader
+from cyclone.patterns.ddswriter import DDSWriter
+from cyclone.patterns.sm_reader import SMReader
+from optimization.cmaes import CMAES
+
+torch.set_printoptions(precision=2, sci_mode=False)
+
+
+class Readers:
+    def __init__(self, participant: CycloneParticipant):
+        self.masks = SMReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.SAM_MASKS,
+            idl_dataclass=MasksIDL(),
+        )
+
+
+class Writers:
+    def __init__(self, participant: CycloneParticipant):
+        self.pose = DDSWriter(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.GRASP_TCP_POSE,
+            idl_dataclass=TCPPoseSample,
+        )
+
+
+logger = get_logger()
+
+
+class GraspPosePicker:
+    POPULATION_SIZE = 1000
+
+    def __init__(self, participant: CycloneParticipant):
+        self.participant = participant
+        self.readers = Readers(participant)
+        self.writers = Writers(participant)
+
+        self.optimizer = CMAES(dimension=4, population_size=100)
+        self.device = torch.device("cuda:0")
+
+    def run(self):
+        while True:
+            try:
+                masks: MasksIDL = self.readers.masks()
+                if masks is None:
+                    raise ContinueException
+
+                solution = self.optimizer_step(masks)
+
+                tcp = self.xyzrpy_to_matrix(solution).cpu().numpy()
+
+                cov = self.optimizer.covariance
+                logger.info(torch.linalg.det(cov))
+
+                msg = TCPPoseSample(
+                    timestamp=masks.timestamp,
+                    pose=tcp.tolist(),
+                    velocity=np.zeros_like(tcp).tolist(),
+                )
+                self.writers.pose(msg)
+
+            except ContinueException:
+                pass
+            finally:
+                self.participant.sleep()
+
+    def optimizer_step(self, masks: MasksIDL):
+        # Generate new solutions
+        solutions = self.optimizer.ask()
+
+        # Evaluate solutions
+        fitness_values = self.evaluate(solutions, masks)
+
+        # Update internal model
+        self.optimizer.tell(solutions, fitness_values)
+
+        return self.optimizer.mean
+
+    def evaluate(self, solutions: torch.Tensor, masks: MasksIDL):
+        tgt = tensor(masks.points[masks.mask_object], device=self.device)
+        obs = tensor(masks.points[masks.mask_hand], device=self.device)
+        if tgt.shape[0] == 0:
+            raise ContinueException
+
+        tcp = self.xyzrpy_to_matrix(solutions)
+        loss_distance = self.distance_loss(tcp, tgt)
+        orientation_loss = self.orientation_loss(tcp)
+        loss_target_points = -self.count_nr_of_points_between_fingers(tcp, tgt)
+        loss_obstacle_points = self.count_nr_of_points_between_fingers(
+            tcp, obs, finger_height=0.06
+        )
+
+        return (
+            loss_distance + loss_target_points + loss_obstacle_points + orientation_loss
+        )
+
+    @staticmethod
+    def xyzrpy_to_matrix(xyzrpy: Tensor) -> Tensor:
+        """
+        Convert xyz position and rpy euler angles to 4x4 homogeneous matrix.
+        xyzrpy: tensor [..., 6] containing xyz translation and rpy rotation
+        returns: tensor [..., 4, 4] homogeneous transformation matrix
+        """
+        x, y, z, yaw = torch.split(xyzrpy, 1, dim=-1)
+
+        roll = torch.ones_like(yaw) * 0.5 * np.pi
+        pitch = torch.zeros_like(yaw)
+
+        # Pre-compute trigonometric functions
+        cr, sr = torch.cos(roll), torch.sin(roll)
+        cp, sp = torch.cos(pitch), torch.sin(pitch)
+        cy, sy = torch.cos(yaw), torch.sin(yaw)
+
+        # Build rotation matrix
+        R = torch.stack(
+            [
+                cp * cy,
+                -cr * sy + sr * sp * cy,
+                sr * sy + cr * sp * cy,
+                cp * sy,
+                cr * cy + sr * sp * sy,
+                -sr * cy + cr * sp * sy,
+                -sp,
+                sr * cp,
+                cr * cp,
+            ],
+            dim=-1,
+        ).reshape(*xyzrpy.shape[:-1], 3, 3)
+
+        # Build translation vector
+        t = torch.cat([x, y, z], dim=-1)
+
+        # Construct homogeneous matrix
+        bottom_row = torch.tensor([0.0, 0.0, 0.0, 1.0], device=xyzrpy.device)
+        bottom_row = bottom_row.expand(*xyzrpy.shape[:-1], 4)
+
+        H = torch.cat(
+            [torch.cat([R, t.unsqueeze(-1)], dim=-1), bottom_row.unsqueeze(-2)], dim=-2
+        )
+
+        return H
+
+    @staticmethod
+    def distance_loss(tcp: Tensor, tgt: Tensor) -> Tensor:
+        X = tcp[:, :3, 3]
+        tgt_pt = torch.median(tgt, dim=0).values
+        distance = torch.linalg.norm(X - tgt_pt[None, :], dim=-1)
+
+        return distance**2
+
+    @staticmethod
+    def orientation_loss(tcp: Tensor) -> Tensor:
+        tool_forward_vector = tcp[:, :2, 2]
+        manipulator_line = tcp[:, :2, 3]
+
+        tool_forward_vector = tool_forward_vector / torch.linalg.norm(
+            tool_forward_vector, dim=-1, keepdim=True
+        )
+        manipulator_line = manipulator_line / torch.linalg.norm(
+            manipulator_line, dim=-1, keepdim=True
+        )
+
+        loss = torch.linalg.norm(tool_forward_vector - manipulator_line, dim=-1)
+
+        return loss
+
+    @staticmethod
+    def count_nr_of_points_between_fingers(
+        tcp: Tensor,
+        cloud: Tensor,
+        maxN=1000,
+        finger_width=0.03,
+        finger_height=0.02,
+        finger_distance=0.08,
+    ) -> Tensor:
+        """
+        Count points that fall within the box-shaped area between gripper fingers.
+
+        Args:
+            tcp: (bs, 4, 4) End effector poses to be evaluated
+            cloud: (N, 3) Points observed by camera
+            maxN: Maximum number of points to process
+            finger_width: Width of each finger in meters
+            finger_height: Height of each finger in meters
+            finger_depth: Depth of fingers in meters
+            finger_distance: Distance between fingers in meters
+
+        Returns:
+            Tensor: (bs,) Number of points between fingers for each pose
+        """
+        if cloud.shape[0] > maxN:
+            cloud = cloud[torch.randperm(cloud.shape[0])[:maxN]]
+
+        # Transform points to TCP frame for each pose in batch
+        bs = tcp.shape[0]
+        points = cloud[None, ...]
+        points_homog = torch.cat(
+            (points, torch.ones((*points.shape[:-1], 1), device=points.device)), dim=-1
+        )[
+            ..., None
+        ]  # (1, 1000, 4, 1)
+
+        # Transform
+        tcp_inv = torch.linalg.inv(tcp)[:, None, :, :]
+        P = (tcp_inv @ points_homog).squeeze(-1)[..., :3]
+
+        x_mask = (P[..., 0] > -finger_distance / 2) & (P[..., 0] < finger_distance / 2)
+        y_mask = (P[..., 1] > -finger_height / 2) & (P[..., 1] < finger_height / 2)
+        z_mask = (P[..., 2] > -finger_width) & (P[..., 2] < 0)
+
+        count = torch.sum(x_mask & y_mask & z_mask, dim=-1)
+
+        return count
+
+
+if __name__ == "__main__":
+    participant = CycloneParticipant()
+    node = GraspPosePicker(participant)
+    node.run()
