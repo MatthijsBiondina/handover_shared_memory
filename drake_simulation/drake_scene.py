@@ -326,6 +326,8 @@ class DrakeScene:
     def goal_pose(self, value: np.ndarray):
         self.__set_triad_pose(self.__goal_triad, value)
 
+    
+
     def __get_triad_pose(self, triad: RigidBody) -> np.ndarray:
         context = self.plant.GetMyMutableContextFromRoot(self.context)
         triad_transform = self.plant.GetFreeBodyPose(context, triad)

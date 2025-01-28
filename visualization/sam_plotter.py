@@ -38,7 +38,7 @@ class Readers:
         self.hands = DDSReader(
             domain_participant=participant,
             topic_name=CYCLONE_NAMESPACE.KALMAN_HANDS,
-            idl_dataclass=KalmanSample
+            idl_dataclass=KalmanSample,
         )
 
 
@@ -93,6 +93,17 @@ class SAMPlotter:
         img = cv2.circle(
             img, (u, v), radius=5, color=hex2rgb(UGENT.PURPLE), thickness=-1
         )
+        return img
+
+    def draw_hands(self, img: np.ndarray, frame: FrameIDL, hands: KalmanSample):
+        for mu, Sigma in zip(hands.mean, hands.covariance):
+            if np.all(np.diag(np.array(Sigma)) < 0.2**2):
+                uv = PointClouds.xyz2uv(np.array(mu)[None, :], frame.intrinsics, frame.extrinsics)
+                u, v = uv[0, 0], uv[0, 1]
+                img = cv2.circle(
+                    img, (u, v), radius=5, color=hex2rgb(UGENT.RED), thickness=-1
+                )
+
         return img
 
 

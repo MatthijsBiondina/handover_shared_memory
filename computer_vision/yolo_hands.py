@@ -79,8 +79,8 @@ class YOLOHands:
 
                 uv_msg = np.full((8, 2), np.nan, dtype=np.float32)
                 xyz_msg = np.full((8, 3), np.nan, dtype=np.float32)
-                uv_msg[:uv.shape[0]] = uv
-                xyz_msg[:xyz.shape[0]] = xyz
+                uv_msg[: uv.shape[0]] = uv
+                xyz_msg[: xyz.shape[0]] = xyz
 
                 msg = MediapipeIDL(
                     timestamp=points.timestamp,
@@ -95,19 +95,45 @@ class YOLOHands:
                 self.writers.pose(msg)
             except ContinueException:
                 pass
+            except ValueError:
+                pass
             finally:
                 self.participant.sleep()
 
     def find_hands_with_yolo(self, points: PointsIDL):
         h, w, _ = points.color.shape
-        results = self.yolo(points.color)
+        results_top = self.yolo(points.color[:w])
+        results_bot = self.yolo(points.color[-w:])
+
+        boxes = []
+        if len(results_top):
+            for box in results_top[0].boxes:
+                boxes.append(
+                    {
+                        "uvuv": box.xyxy.squeeze(0).cpu().numpy(),
+                        "conf": box.conf.cpu().item(),
+                    }
+                )
+
+        # todo: debug line
+        boxes = []
+
+        if len(results_bot):
+            for box in results_bot[0].boxes:
+                boxes.append(
+                    {
+                        "uvuv": box.xyxy.squeeze(0).cpu().numpy()
+                        + np.array([0, h - w, 0, h - w]),
+                        "conf": box.conf.cpu().item(),
+                    }
+                )
         uv_ = []
         xyz_ = []
 
-        boxes = sorted(results[0].boxes, key=lambda b: b.conf.item(), reverse=True)
+        boxes = sorted(boxes, key=lambda b: b["conf"], reverse=True)
 
         for box in boxes:
-            uvuv = box.xyxy.squeeze(0).cpu().numpy()
+            uvuv = box["uvuv"]
             u = int(np.clip((uvuv[0] + uvuv[2]) / 2, 0, w - 1))
             v = int(np.clip((uvuv[1] + uvuv[3]) / 2, 0, h - 1))
             uv_.append([u, v])
@@ -126,8 +152,10 @@ class YOLOHands:
         return uv, xyz
 
     def find_hands_with_mediapipe(self, points: PointsIDL):
-        results = self.mediapipe.process(points.color)
         h, w, _ = points.color.shape
+        pad = (h - w) // 2
+        img = points.color[pad : w + pad]
+        results = self.mediapipe.process(img)
         landmarks = []
         for _, indices in self.HAND_INDICES.items():
             for idx in indices.values():
@@ -135,7 +163,7 @@ class YOLOHands:
                     continue
                 landmark = results.pose_landmarks.landmark[idx]
                 if landmark.visibility > self.VISIBILITY_THRESHOLD:
-                    landmarks.append([landmark.x * w, landmark.y * h])
+                    landmarks.append([landmark.x * w, landmark.y * w + pad])
 
         if not len(landmarks):
             return np.empty((0, 2)), np.empty((0, 3))

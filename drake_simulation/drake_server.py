@@ -52,6 +52,11 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.CUROBO_COLLISION_SPHERES,
             idl_dataclass=CuroboCollisionSpheresSample,
         )
+        self.cmaes = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.GRASP_TCP_POSE,
+            idl_dataclass=TCPPoseSample,
+        )
 
 
 class Writers:
@@ -86,6 +91,7 @@ class DrakeServer:
                 self.__update_tcp_pose()
                 self.__update_curobo_spheres()
                 self.__update_goal_pose()
+                self.__update_grasp_pose()
             except WaitingForFirstMessageException:
                 pass
             self.participant.sleep()
@@ -126,7 +132,13 @@ class DrakeServer:
         goal_pose_sample = self.readers.goal_pose()
         if goal_pose_sample is None:
             raise WaitingForFirstMessageException
-        self.simulator.goal_pose = np.array(goal_pose_sample.pose)
+        # self.simulator.goal_pose = np.array(goal_pose_sample.pose)
+
+    def __update_grasp_pose(self):
+        grasp_pose_sample = self.readers.cmaes()
+        if grasp_pose_sample is None:
+            raise WaitingForFirstMessageException
+        self.simulator.goal_pose = np.array(grasp_pose_sample.pose)
 
     def __get_world_config(
         self, request: WorldConfigRPC.Request

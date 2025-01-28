@@ -6,12 +6,15 @@ from cantrips.exceptions import ContinueException
 from cantrips.logging.logger import get_logger
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
+from cyclone.idl.defaults.boolean_idl import StateSample
+from cyclone.idl.procedures.coordinate_sample import CoordinateSample
 from cyclone.idl.ur5e.tcp_pose_sample import TCPPoseSample
 from cyclone.idl_shared_memory.masks_idl import MasksIDL
 from cyclone.patterns.ddsreader import DDSReader
 from cyclone.patterns.ddswriter import DDSWriter
 from cyclone.patterns.sm_reader import SMReader
 from optimization.cmaes import CMAES
+from procedures.state_machine_states import States
 
 torch.set_printoptions(precision=2, sci_mode=False)
 
@@ -22,6 +25,16 @@ class Readers:
             domain_participant=participant,
             topic_name=CYCLONE_NAMESPACE.SAM_MASKS,
             idl_dataclass=MasksIDL(),
+        )
+        self.target = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.TARGET_OBJECT,
+            idl_dataclass=CoordinateSample,
+        )
+        self.state = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.STATE_MACHINE_STATE,
+            idl_dataclass=StateSample,
         )
 
 
@@ -38,29 +51,46 @@ logger = get_logger()
 
 
 class GraspPosePicker:
-    POPULATION_SIZE = 1000
+    POPULATION_SIZE = 100
+    N = 100
+    DEVICE = "cpu"
 
     def __init__(self, participant: CycloneParticipant):
         self.participant = participant
         self.readers = Readers(participant)
         self.writers = Writers(participant)
 
-        self.optimizer = CMAES(dimension=4, population_size=100)
-        self.device = torch.device("cuda:0")
+        # self.optimizer = CMAES(dimension=4, population_size=100)
+        self.active = False
+        self.optimizer = None
+        self.device = torch.device(self.DEVICE)
+
+        logger.info("CMAES Ready!")
 
     def run(self):
         while True:
             try:
+                state: StateSample = self.readers.state()
+                if state is None:
+                    raise ContinueException
+
+                if not state.state == States.GRASPING:
+                    if self.active:
+                        self.active = False
+                        self.optimizer = None
+                    raise ContinueException
+
                 masks: MasksIDL = self.readers.masks()
                 if masks is None:
                     raise ContinueException
 
+                if not self.active:
+                    self.init_optimizer(masks)
+                    self.active = True
+
                 solution = self.optimizer_step(masks)
 
                 tcp = self.xyzrpy_to_matrix(solution).cpu().numpy()
-
-                cov = self.optimizer.covariance
-                logger.info(torch.linalg.det(cov))
 
                 msg = TCPPoseSample(
                     timestamp=masks.timestamp,
@@ -70,9 +100,31 @@ class GraspPosePicker:
                 self.writers.pose(msg)
 
             except ContinueException:
+                self.participant.sleep()
                 pass
             finally:
-                self.participant.sleep()
+                # self.participant.sleep()
+                pass
+
+    def init_optimizer(self, masks: MasksIDL):
+        tgt = masks.points[masks.mask_object]
+        if tgt.shape[0] > self.N:
+            tgt = tgt[np.random.permutation(tgt.shape[0])[: self.N]]
+        tgt = tensor(tgt, device=self.device)
+        if tgt.shape[0] == 0:
+            raise ContinueException
+
+        mu = torch.zeros(4, device=self.device)
+        mu[:3] = torch.median(tgt, dim=0).values
+        mu[3] = 0  # -0.5pi
+
+        self.optimizer = CMAES(
+            dimension=4,
+            population_size=100,
+            initial_mean=mu,
+            initial_sigma=0.1,
+            device=self.DEVICE,
+        )
 
     def optimizer_step(self, masks: MasksIDL):
         # Generate new solutions
@@ -87,8 +139,16 @@ class GraspPosePicker:
         return self.optimizer.mean
 
     def evaluate(self, solutions: torch.Tensor, masks: MasksIDL):
-        tgt = tensor(masks.points[masks.mask_object], device=self.device)
-        obs = tensor(masks.points[masks.mask_hand], device=self.device)
+        tgt_np = masks.points[masks.mask_object]
+        obs_np = masks.points[masks.mask_hand]
+
+        if tgt_np.shape[0] > self.N:
+            tgt_np = tgt_np[np.random.permutation(tgt_np.shape[0])[: self.N]]
+        if obs_np.shape[0] > self.N:
+            obs_np = obs_np[np.random.permutation(obs_np.shape[0])[: self.N]]
+
+        tgt = tensor(tgt_np, device=self.device)
+        obs = tensor(obs_np, device=self.device)
         if tgt.shape[0] == 0:
             raise ContinueException
 
@@ -178,7 +238,7 @@ class GraspPosePicker:
     def count_nr_of_points_between_fingers(
         tcp: Tensor,
         cloud: Tensor,
-        maxN=1000,
+        maxN=100,
         finger_width=0.03,
         finger_height=0.02,
         finger_distance=0.08,

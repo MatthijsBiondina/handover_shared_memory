@@ -29,3 +29,4 @@ class CYCLONE_NAMESPACE:
     SAM_MASKS = "sam.masks"
 
     GRASP_TCP_POSE = "grasp.tcp_pose"
+    STATE_MACHINE_STATE = "grasp.optimizer_running"

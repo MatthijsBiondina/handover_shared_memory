@@ -143,7 +143,8 @@ class CMAES:
         ).item()
 
         self.covariance += torch.eye(self.dimension, device=self.device) * 0.01
-        self.sigma += 0.01
+        if self.sigma < 0.01:
+            self.sigma += 0.01
 
 
 def example_function(x: torch.Tensor) -> float:

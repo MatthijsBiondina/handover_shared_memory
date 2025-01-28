@@ -51,7 +51,6 @@ class YOLOLabeler:
 
         self.yolo_model = YOLO("yolov8x")
 
-
         with open(f"{os.path.dirname(__file__)}/../config/yolo_names.json", "w+") as f:
             json.dump(self.yolo_model.names, f, indent=2)
 
@@ -61,11 +60,21 @@ class YOLOLabeler:
         while True:
             try:
                 frame: PointsIDL = self.readers.frame()
-                results = self.yolo_model(frame.color)
-                if not len(results):
+                if frame is None:
                     raise ContinueException
+                h, w, _ = frame.color.shape
+                results_top = self.yolo_model(frame.color[:w])
+                results_bot = self.yolo_model(frame.color[-w:])
 
-                objects_array = self.extract_objects(results[0])
+                objects = []
+                if len(results_top):
+                    objects.extend(self.extract_objects(results_top[0]))
+                if len(results_bot):
+                    objects_bot = self.extract_objects(results_bot[0])
+                    for o in objects_bot:
+                        o["bbox"] += np.array([0.0, h - w, 0.0, h - w])
+                    objects.extend(objects_bot)
+                objects_array = self.pad_objects(objects)
 
                 msg = YOLOIDL(
                     timestamp=frame.timestamp,
@@ -95,8 +104,11 @@ class YOLOLabeler:
                         "conf": box.conf.item(),
                     }
                 )
-        objects = sorted(objects, key=lambda o: o["conf"], reverse=True)
 
+        return objects
+
+    def pad_objects(self, objects):
+        objects = sorted(objects, key=lambda o: o["conf"], reverse=True)
         object_array = np.full((self.MAX_NR_OF_OBJECTS, 6), np.nan, dtype=np.float32)
         for ii in range(len(objects)):
             try:
