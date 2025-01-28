@@ -92,6 +92,8 @@ class GraspPosePicker:
 
                 tcp = self.xyzrpy_to_matrix(solution).cpu().numpy()
 
+
+
                 msg = TCPPoseSample(
                     timestamp=masks.timestamp,
                     pose=tcp.tolist(),
@@ -281,7 +283,6 @@ class GraspPosePicker:
         count = torch.sum(x_mask & y_mask & z_mask, dim=-1)
 
         return count
-
 
 if __name__ == "__main__":
     participant = CycloneParticipant()

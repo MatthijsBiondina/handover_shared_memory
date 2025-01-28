@@ -9,6 +9,7 @@ from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import WaitingForFirstMessageException
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
+from cyclone.idl.ur5e.gripper_width_sample import GripperWidthSample
 from cyclone.idl.ur5e.joint_configuration_sample import JointConfigurationSample
 from cyclone.idl.ur5e.tcp_pose_sample import TCPPoseSample
 from cyclone.patterns.ddsreader import DDSReader
@@ -40,6 +41,11 @@ class Writers:
             domain_participant=participant,
             topic_name=CYCLONE_NAMESPACE.TARGET_TCP_POSE,
             idl_dataclass=TCPPoseSample,
+        )
+        self.gripper_width = DDSWriter(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.TARGET_GRIPPER_WIDTH,
+            idl_dataclass=GripperWidthSample,
         )
 
 
@@ -149,6 +155,12 @@ class Ur5eClient:
         rot_diff_deg = np.degrees(rot_diff)
 
         return pos_diff <= pos_tol and rot_diff_deg <= rot_tol
+
+    def close_gripper(self):
+        self.writers.gripper_width(GripperWidthSample(time.time(), 0.005, 0.1))
+
+    def open_gripper(self):
+        self.writers.gripper_width(GripperWidthSample(time.time(), 0.085, 1.0))
 
     def look_at(self, position: np.ndarray, focus: np.ndarray):
         z_axis = focus - position

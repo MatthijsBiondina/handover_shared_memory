@@ -4,9 +4,9 @@ import numpy as np
 from cyclonedds.domain import DomainParticipant
 from munch import Munch
 from airo_robots.manipulators import URrtde
+from airo_robots.grippers.hardware.robotiq_2f85_urcap import Robotiq2F85
 
 from cantrips.configs import load_config
-from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import WaitingForFirstMessageException
 from cantrips.logging.logger import get_logger
 from cyclone.cyclone_participant import CycloneParticipant
@@ -32,6 +32,11 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.CUROBO_TRAJECTORY,
             idl_dataclass=TrajectorySample,
         )
+        self.gripper = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.TARGET_GRIPPER_WIDTH,
+            idl_dataclass=GripperWidthSample,
+        )
 
 
 class Writers:
@@ -52,8 +57,8 @@ class UR5eRobotArm:
     def __init__(self, participant: CycloneParticipant):
         self.config: Munch = load_config()
         self.sophie = URrtde(self.config.ip_sophie, URrtde.UR3E_CONFIG)
-        # self.sophie.gripper = Robotiq2F85(self.config.ip_sophie)
-        self.sophie.gripper = None
+        self.sophie.gripper = Robotiq2F85(self.config.ip_sophie)
+        # self.sophie.gripper = None
 
         # Cyclone setup
         self.participant = participant
@@ -65,16 +70,25 @@ class UR5eRobotArm:
         self.__joint_configuration = None
         self.__tcp_pose = None
         self.__trajectory = None
+        self.__gripper_action = None
 
         logger.info("UR5eRobotArm: Ready!")
 
     def run(self):
-        ii = 0
         while True:
             try:
                 self.__publish_robot_state()
                 action = self.__get_action()
                 self.sophie.servo_to_joint_configuration(action, self.config.dt)
+
+                gripper: GripperWidthSample = self.readers.gripper.take()
+                if gripper is None:
+                    raise WaitingForFirstMessageException
+                if self.__gripper_action is None:
+                    self.__gripper_action = self.sophie.gripper.move(gripper.width, force=gripper.force)
+                if self.__gripper_action.is_action_done():
+                    self.__gripper_action = None
+
             except WaitingForFirstMessageException:
                 pass
             self.participant.sleep()
@@ -173,7 +187,7 @@ class UR5eRobotArm:
         pose = np.array(action_sample.pose)
         dpose = pose - self.sophie.get_joint_configuration()
         if np.absolute(dpose).max() > self.config.max_angular_velocity * self.config.dt:
-            
+
             # return self.sophie.get_joint_configuration()
 
             dpose = (
