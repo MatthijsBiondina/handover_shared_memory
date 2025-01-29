@@ -1,4 +1,5 @@
 import time
+import warnings
 
 import numpy as np
 from cyclonedds.domain import DomainParticipant
@@ -58,7 +59,6 @@ class UR5eRobotArm:
         self.config: Munch = load_config()
         self.sophie = URrtde(self.config.ip_sophie, URrtde.UR3E_CONFIG)
         self.sophie.gripper = Robotiq2F85(self.config.ip_sophie)
-        # self.sophie.gripper = None
 
         # Cyclone setup
         self.participant = participant
@@ -71,27 +71,67 @@ class UR5eRobotArm:
         self.__tcp_pose = None
         self.__trajectory = None
         self.__gripper_action = None
+        self.__gripper_tgt_width = None
+        self.is_holding_object = False
 
         logger.info("UR5eRobotArm: Ready!")
 
     def run(self):
+        ii = 0
         while True:
             try:
                 self.__publish_robot_state()
                 action = self.__get_action()
                 self.sophie.servo_to_joint_configuration(action, self.config.dt)
-
-                gripper: GripperWidthSample = self.readers.gripper.take()
-                if gripper is None:
-                    raise WaitingForFirstMessageException
-                if self.__gripper_action is None:
-                    self.__gripper_action = self.sophie.gripper.move(gripper.width, force=gripper.force)
-                if self.__gripper_action.is_action_done():
-                    self.__gripper_action = None
+                self.__handle_gripper_width()
 
             except WaitingForFirstMessageException:
                 pass
             self.participant.sleep()
+
+    def __handle_gripper_width(self):
+        current_width: float = self.sophie.gripper.get_current_width()
+        gripper_tgt: GripperWidthSample = self.readers.gripper.take()
+        if gripper_tgt is None:
+            if self.__gripper_action is None:
+                return
+
+            if np.isclose(current_width, self.__gripper_tgt_width, atol=0.001):
+                self.__cancel_gripper_action()
+                return
+            if (
+                self.sophie.gripper.is_an_object_grasped()
+                and self.__gripper_tgt_width < current_width
+            ):
+                self.is_holding_object = True
+                self.__cancel_gripper_action()
+                # self.__gripper_action = self.sophie.gripper.move(
+                #     current_width, force=100
+                # )
+
+        else:
+            try:
+                target_width = gripper_tgt.width
+            except AttributeError:
+                return
+            self.__gripper_tgt_width = target_width
+            if np.isclose(current_width, target_width, atol=0.001):
+                return  # If we're already at target width, do nothing
+            elif target_width > current_width:
+                self.__gripper_action = self.sophie.gripper.move(target_width, force=25)
+                self.is_holding_object = (
+                    False  # if we were holding something, we just released it
+                )
+            elif target_width < current_width:
+                self.__gripper_action = self.sophie.gripper.move(target_width, force=25)
+
+    def __cancel_gripper_action(self):
+        if self.__gripper_action is None:
+            return
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.__gripper_action.wait(0)
+        self.__gripper_action = None
 
     def __publish_robot_state(self):
         # Request data from robot
@@ -124,7 +164,11 @@ class UR5eRobotArm:
         else:
             gripper_width = 0.1
         self.writers.gripper(
-            GripperWidthSample(timestamp=timestamp_new, width=gripper_width)
+            GripperWidthSample(
+                timestamp=timestamp_new,
+                width=gripper_width,
+                holding=self.sophie.gripper.is_an_object_grasped(),
+            )
         )
 
         # Update placeholders

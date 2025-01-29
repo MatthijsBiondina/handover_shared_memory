@@ -53,15 +53,13 @@ class GripperTestProcedure:
         self.tcp_rest = self.ur5e.tcp_pose
         return self.tcp_rest
 
-    def run(self, interval=5):
+    def run(self, interval=10):
         while True:
             try:
-                if int(time.time() / interval) % 2:
-                    self.ur5e.close_gripper()
-                else:
-                    self.ur5e.open_gripper()
-
-                self.ur5e.move_to_tcp_pose(self.tcp_rest)
+                self.ur5e.close_gripper()
+                time.sleep(interval)
+                self.ur5e.open_gripper()
+                time.sleep(interval)
             except ContinueException:
                 pass
             finally:

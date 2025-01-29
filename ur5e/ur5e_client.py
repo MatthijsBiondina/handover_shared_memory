@@ -28,6 +28,11 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.UR5E_TCP_POSE,
             idl_dataclass=TCPPoseSample,
         )
+        self.gripper = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.UR5E_GRIPPER_WIDTH,
+            idl_dataclass=GripperWidthSample,
+        )
 
 
 class Writers:
@@ -84,6 +89,28 @@ class Ur5eClient:
             except WaitingForFirstMessageException:
                 self.participant.sleep()
 
+    @property
+    def gripper_width(self):
+        while True:
+            try:
+                sample: GripperWidthSample = self.readers.gripper()
+                if sample is None:
+                    raise WaitingForFirstMessageException
+                return sample.width
+            except WaitingForFirstMessageException:
+                self.participant.sleep()
+
+    @property
+    def is_holding_an_object(self):
+        while True:
+            try:
+                sample: GripperWidthSample = self.readers.gripper()
+                if sample is None:
+                    raise WaitingForFirstMessageException
+                return sample.holding
+            except WaitingForFirstMessageException:
+                self.participant.sleep()
+
     def move_to_joint_configuration(
         self, target_joints: np.ndarray, wait: bool = True
     ) -> None:
@@ -123,7 +150,7 @@ class Ur5eClient:
     def is_at_joint_state(self, joints: np.ndarray):
         return np.all(np.isclose(self.joint_state, joints, atol=0.01))
 
-    def is_at_tcp_pose(self, pose: np.ndarray, pos_tol=0.01, rot_tol=5.0):
+    def is_at_tcp_pose(self, pose: np.ndarray, pos_tol=0.01, rot_tol=None):
         """
         Check if current TCP pose is close to target pose.
 
@@ -154,13 +181,16 @@ class Ur5eClient:
         )
         rot_diff_deg = np.degrees(rot_diff)
 
-        return pos_diff <= pos_tol and rot_diff_deg <= rot_tol
+        if rot_tol is None:
+            return pos_diff <= pos_tol
+        else:
+            return pos_diff <= pos_tol and rot_diff_deg <= rot_tol
 
     def close_gripper(self):
-        self.writers.gripper_width(GripperWidthSample(time.time(), 0.005, 0.1))
+        self.writers.gripper_width(GripperWidthSample(time.time(), 0.005, 0.001))
 
     def open_gripper(self):
-        self.writers.gripper_width(GripperWidthSample(time.time(), 0.085, 1.0))
+        self.writers.gripper_width(GripperWidthSample(time.time(), 0.08, 1.0))
 
     def look_at(self, position: np.ndarray, focus: np.ndarray):
         z_axis = focus - position

@@ -74,7 +74,7 @@ class GraspPosePicker:
                 if state is None:
                     raise ContinueException
 
-                if not state.state == States.GRASPING:
+                if not state.state == States.REACHING:
                     if self.active:
                         self.active = False
                         self.optimizer = None
@@ -158,7 +158,7 @@ class GraspPosePicker:
         loss_distance = self.distance_loss(tcp, tgt)
         orientation_loss = self.orientation_loss(tcp)
         loss_target_points = -self.count_nr_of_points_between_fingers(tcp, tgt)
-        loss_obstacle_points = self.count_nr_of_points_between_fingers(
+        loss_obstacle_points = 10 * self.count_nr_of_points_between_fingers(
             tcp, obs, finger_height=0.06
         )
 

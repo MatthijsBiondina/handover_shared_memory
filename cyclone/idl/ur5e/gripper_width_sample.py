@@ -11,3 +11,4 @@ class GripperWidthSample(
 
     width: float = field(metadata={"id": 1})
     force: float = field(default=0.0, metadata={"id": 2})
+    holding: bool = field(default=False, metadata={"id": 3})
