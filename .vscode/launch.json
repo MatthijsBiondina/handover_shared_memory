@@ -10,7 +10,7 @@
             "type": "debugpy",
             "request": "launch",
             "python": "${command:python.interpreterPath}",
-            "program": "${workspaceFolder}/procedures/gripper_test.py",
+            "program": "${workspaceFolder}/optimization/grasp_pose_picker.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {

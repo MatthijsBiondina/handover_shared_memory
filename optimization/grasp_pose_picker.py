@@ -92,8 +92,6 @@ class GraspPosePicker:
 
                 tcp = self.xyzrpy_to_matrix(solution).cpu().numpy()
 
-
-
                 msg = TCPPoseSample(
                     timestamp=masks.timestamp,
                     pose=tcp.tolist(),
@@ -118,7 +116,7 @@ class GraspPosePicker:
 
         mu = torch.zeros(4, device=self.device)
         mu[:3] = torch.median(tgt, dim=0).values
-        mu[3] = 0  # -0.5pi
+        mu[3] = torch.atan2(mu[1], mu[0]) + 0.5 * np.pi
 
         self.optimizer = CMAES(
             dimension=4,
@@ -283,6 +281,7 @@ class GraspPosePicker:
         count = torch.sum(x_mask & y_mask & z_mask, dim=-1)
 
         return count
+
 
 if __name__ == "__main__":
     participant = CycloneParticipant()

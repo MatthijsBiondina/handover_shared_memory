@@ -33,10 +33,8 @@ python -m d405.d405_hardware &
 python -m computer_vision.pointclouds &
 python -m computer_vision.yolo_hands &
 python -m computer_vision.yolo_labeler &
-
 python -m computer_vision.hands_segmentation &
 
-#
 python -m sensor_fusion.yolo_sensor_fusion &
 python -m sensor_fusion.hands_sensor_fusion &
 

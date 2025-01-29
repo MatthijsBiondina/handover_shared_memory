@@ -72,13 +72,21 @@ class HandSegmentation:
         self.device = torch.device("cuda:0")
         self.dnn_model, self.transform = self.load_model()
 
+
+
         logger.info("HandSegmentation Ready!")
 
     def load_model(self):
         # First ensure repository is downloaded
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning, message=".*'pretrained' is deprecated.*")
-            warnings.filterwarnings("ignore", category=UserWarning, message=".*Arguments other than a weight enum.*")
+            warnings.filterwarnings(
+                "ignore", category=UserWarning, message=".*'pretrained' is deprecated.*"
+            )
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=".*Arguments other than a weight enum.*",
+            )
             torch.hub.load(
                 "guglielmocamporese/hands-segmentation-pytorch",
                 "hand_segmentor",
@@ -146,13 +154,21 @@ class HandSegmentation:
 
     @torch.no_grad()
     def apply_dnn_model(self, img: np.ndarray):
-        X = torch.tensor(img, dtype=torch.float32).to(self.device)
-        X /= 255.0
-        X = X.permute(2, 0, 1)
-        X = self.transform(X)
-        X = X[None, ...]
-        y = self.dnn_model(X)
-        m = y.argmax(1).squeeze().cpu().numpy().astype(np.bool_)
+        h, w, c = img.shape
+        m = np.zeros((h, w), dtype=np.bool_)
+
+        X_top = torch.tensor(img[:w], dtype=torch.float32).to(self.device) / 255.0
+        X_bot = torch.tensor(img[-w:], dtype=torch.float32).to(self.device) / 255.0
+        X_top, X_bot = X_top.permute(2, 0, 1), X_bot.permute(2, 0, 1)
+        X_top, X_bot = self.transform(X_top), self.transform(X_bot)
+        y_top = self.dnn_model(X_top[None, ...])
+        y_bot = self.dnn_model(X_bot[None, ...])
+        m_top = y_top.argmax(1).squeeze().cpu().numpy().astype(np.bool_)
+        m_bot = y_bot.argmax(1).squeeze().cpu().numpy().astype(np.bool_)
+
+        m[:w] = m_top
+        # For the overlapping part if one of the two saw the hand, it's a hand
+        m[-w:] = (m[-w:] | m_bot) 
         return m
 
     def distance_mask(self, points: PointsIDL, target: CoordinateSample):

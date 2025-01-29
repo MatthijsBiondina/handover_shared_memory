@@ -1,3 +1,4 @@
+import sys
 import time
 
 import numpy as np
@@ -49,7 +50,9 @@ class Writers:
 
 
 class ApproachObjectProcedure:
-    START_JS = [180, -100, 30, 90, 90, 0]
+    # START_JS = [180, -100, 30, 90, 90, 0]
+    START_JS = [135, -180, 90, 90, 90, 0]
+
     WORKSPACE = {
         "xmin": -1,
         "xmax": 0,
@@ -79,6 +82,7 @@ class ApproachObjectProcedure:
 
         self.stopwatch = None
         self.grasp_tcp = None
+        self.give_back_tcp = None
         self.grasping = False
 
         logger.info("Approach object: Ready!")
@@ -168,6 +172,7 @@ class ApproachObjectProcedure:
                 if grasp is None:
                     raise ContinueException
                 self.grasp_tcp = np.array(grasp.pose)
+                self.give_back_tcp = np.array(grasp.pose)
             self.ur5e.move_to_tcp_pose(self.grasp_tcp)
             if self.ur5e.is_at_tcp_pose(self.grasp_tcp, pos_tol=0.01, rot_tol=None):
                 return States.GRASPING
@@ -180,10 +185,6 @@ class ApproachObjectProcedure:
 
     def grasp(self):
         self.ur5e.close_gripper()
-        # if not self.grasping:
-        #     self.ur5e.close_gripper()
-        #     self.grasping = True
-
         if self.ur5e.is_holding_an_object:
             return States.RETRACT
         if self.ur5e.gripper_width < 0.01:
@@ -195,6 +196,7 @@ class ApproachObjectProcedure:
         self.ur5e.move_to_tcp_pose(self.tcp_rest)
         if self.ur5e.is_at_tcp_pose(self.tcp_rest):
             if self.ur5e.is_holding_an_object:
+
                 return States.GIVE_BACK
             else:
                 self.ur5e.open_gripper()
@@ -202,23 +204,28 @@ class ApproachObjectProcedure:
         return States.RETRACT
 
     def give_back(self):
-        self.ur5e.move_to_tcp_pose(self.GIVE_BACK_TCP)
-        if self.ur5e.is_at_tcp_pose(self.GIVE_BACK_TCP):
+        self.ur5e.move_to_tcp_pose(self.give_back_tcp)
+        if self.ur5e.is_at_tcp_pose(self.give_back_tcp):
             self.ur5e.open_gripper()
             return States.RESTING
         return States.GIVE_BACK
 
-    def is_target_in_workspace(self, target):
+    def is_target_in_workspace(self, target, zmin=0.2, cone=45, max_dist=1.0):
         if target is None:
             return False
         if time.time() - target.timestamp > self.PATIENCE:
             return False
-        if not (
-            self.WORKSPACE["xmin"] < target.x < self.WORKSPACE["xmax"]
-            and self.WORKSPACE["ymin"] < target.y < self.WORKSPACE["ymax"]
-            and self.WORKSPACE["zmin"] < target.z < self.WORKSPACE["zmax"]
-        ):
+
+        if target.z < zmin:
             return False
+        tgt = np.array([target.x, target.y, target.z, 1.0])
+        tgt_tcp = (np.linalg.inv(self.tcp_rest) @ tgt[:, None]).squeeze(-1)[:3]
+        angle = np.rad2deg(np.arctan2(tgt_tcp[0], tgt_tcp[2]))
+        if abs(angle) > cone:
+            return False
+        if np.linalg.norm(tgt[:2]) > max_dist:
+            return False
+
         return True
 
 
