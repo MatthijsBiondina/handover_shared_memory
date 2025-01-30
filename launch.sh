@@ -28,6 +28,8 @@ python -m drake_simulation.drake_server &
 python -m curobo_simulation.curobo_planner &
 python -m curobo_simulation.curobo_forward_kinematics &
 
+python -m sensor_comm_dds.communication.readers.magtouch_serial_reader &
+python -m visualization.magtouchplotter &
 python -m d405.d405_hardware &
 #
 python -m computer_vision.pointclouds &
@@ -47,7 +49,7 @@ python -m decisions.select_target_object &
 # python -m visualization.target_plotter &
 
 python -m visualization.sam_plotter &
-# python -m procedures.approach_object &
+python -m procedures.approach_object &
 python -m optimization.grasp_pose_picker &
 
 # Print message indicating background launch

@@ -1,3 +1,4 @@
+import sys
 import time
 
 import numpy as np
@@ -33,7 +34,7 @@ class Writers:
         pass
 
 class GripperTestProcedure:
-    JOINTS= [190, -6, 0, 6, 100, 0]
+    JOINTS= [190, -4, 0, 4, 100, 0]
 
     def __init__(self, domain_participant = CycloneParticipant):
         self.participant = domain_participant
@@ -55,6 +56,8 @@ class GripperTestProcedure:
 
     def run(self, interval=10):
         while True:
+            # self.ur5e.open_gripper()
+            # sys.exit(0)
             try:
                 self.ur5e.close_gripper()
                 time.sleep(interval)

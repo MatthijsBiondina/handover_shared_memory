@@ -106,7 +106,7 @@ class GraspPosePicker:
                 # self.participant.sleep()
                 pass
 
-    def init_optimizer(self, masks: MasksIDL):
+    def init_optimizer(self, masks: MasksIDL, dimension=5):
         tgt = masks.points[masks.mask_object]
         if tgt.shape[0] > self.N:
             tgt = tgt[np.random.permutation(tgt.shape[0])[: self.N]]
@@ -114,15 +114,15 @@ class GraspPosePicker:
         if tgt.shape[0] == 0:
             raise ContinueException
 
-        mu = torch.zeros(4, device=self.device)
+        mu = torch.zeros(dimension, device=self.device)
         mu[:3] = torch.median(tgt, dim=0).values
         mu[3] = torch.atan2(mu[1], mu[0]) + 0.5 * np.pi
 
         self.optimizer = CMAES(
-            dimension=4,
-            population_size=100,
+            dimension=dimension,
+            population_size=256,
             initial_mean=mu,
-            initial_sigma=0.1,
+            initial_sigma=1.0,
             device=self.DEVICE,
         )
 
@@ -153,16 +153,22 @@ class GraspPosePicker:
             raise ContinueException
 
         tcp = self.xyzrpy_to_matrix(solutions)
-        loss_distance = self.distance_loss(tcp, tgt)
-        orientation_loss = self.orientation_loss(tcp)
-        loss_target_points = -self.count_nr_of_points_between_fingers(tcp, tgt)
-        loss_obstacle_points = 10 * self.count_nr_of_points_between_fingers(
+        L_dist = self.distance_loss(tcp, tgt)
+        L_angl = self.orientation_loss(tcp)
+        L_tgtx = -10 * self.count_nr_of_points_between_fingers(tcp, tgt)
+        L_obsx = 30 * self.count_nr_of_points_between_fingers(
             tcp, obs, finger_height=0.06
         )
+        L_eigv = 0.1*self.eigen_loss(tcp, tgt)
 
-        return (
-            loss_distance + loss_target_points + loss_obstacle_points + orientation_loss
-        )
+        # logger.info(
+        #     f"D: {L_dist[0]:.2f} | "
+        #     f"O: {L_angl[0]:.2f} | "
+        #     f"+: {L_tgtx[0]:.2f} | "
+        #     f"-: {L_obsx[0]:.2f}"
+        # )
+
+        return L_dist + L_tgtx + L_obsx + L_angl + L_eigv
 
     @staticmethod
     def xyzrpy_to_matrix(xyzrpy: Tensor) -> Tensor:
@@ -171,10 +177,12 @@ class GraspPosePicker:
         xyzrpy: tensor [..., 6] containing xyz translation and rpy rotation
         returns: tensor [..., 4, 4] homogeneous transformation matrix
         """
-        x, y, z, yaw = torch.split(xyzrpy, 1, dim=-1)
-
+        if xyzrpy.shape[-1] == 4:
+            x, y, z, yaw = torch.split(xyzrpy, 1, dim=-1)
+            pitch = torch.zeros_like(yaw)
+        else:
+            x, y, z, yaw, pitch = torch.split(xyzrpy, 1, dim=-1)
         roll = torch.ones_like(yaw) * 0.5 * np.pi
-        pitch = torch.zeros_like(yaw)
 
         # Pre-compute trigonometric functions
         cr, sr = torch.cos(roll), torch.sin(roll)
@@ -260,6 +268,8 @@ class GraspPosePicker:
         """
         if cloud.shape[0] > maxN:
             cloud = cloud[torch.randperm(cloud.shape[0])[:maxN]]
+        if cloud.shape[0] == 0:
+            return torch.zeros(tcp.shape[0], device=tcp.device)
 
         # Transform points to TCP frame for each pose in batch
         bs = tcp.shape[0]
@@ -279,8 +289,38 @@ class GraspPosePicker:
         z_mask = (P[..., 2] > -finger_width) & (P[..., 2] < 0)
 
         count = torch.sum(x_mask & y_mask & z_mask, dim=-1)
+        return count / cloud.shape[0]
 
-        return count
+    @staticmethod
+    def eigen_loss(tcp: Tensor, cloud: Tensor, maxN=100):
+        N = cloud.shape[0]
+        if N > maxN:
+            cloud = cloud[torch.randperm(N)[:maxN]]
+            N = maxN
+        elif N == 0:
+            return torch.zeros(tcp.shape[0], device=tcp.device)
+
+        # Center the points by subtracting the mean
+        mean = torch.mean(cloud, dim=0)
+        centered = cloud - mean
+
+        # Compute covariance matrix
+        cov = torch.matmul(centered.T, centered) / (N - 1)
+        eigenvalues, eigenvectors = torch.linalg.eigh(cov)
+        eigenvalues = eigenvalues.flip(0)
+        eigenvectors = eigenvectors.flip(1)
+
+        # First Principal Component of pointcloud
+        PC1 = eigenvectors[:, 0] / torch.linalg.norm(eigenvectors[:, 0])
+        if PC1[2] < 0:
+            PC1 = PC1 * -1  # point up
+
+        # compute cosine similarity between tcp-y and pc1
+        tcp_y = tcp[:, :3, 1]
+
+        sim = (tcp_y @ PC1[:, None]).squeeze(-1)
+
+        return 1 - sim
 
 
 if __name__ == "__main__":

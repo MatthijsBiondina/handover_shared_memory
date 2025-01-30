@@ -155,7 +155,7 @@ class DrakeScene:
                     RigidTransform(),
                     sphere_shape,
                     f"curobo_visual_{i}",
-                    np.array([1.0, 0, 0, 0.5]),
+                    np.array([1.0, 0, 0, 0.25]),
                 )
 
                 sphere_buffer.append(sphere_body)
