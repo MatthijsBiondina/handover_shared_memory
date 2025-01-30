@@ -51,7 +51,7 @@ class Writers:
 
 class ApproachObjectProcedure:
     # START_JS = [180, -100, 30, 90, 90, 0]
-    START_JS = [135, -180, 90, 90, 90, 0]
+    START_JS = [115, -180, 90, 90, 90, 0]
 
     WORKSPACE = {
         "xmin": -1,
@@ -62,7 +62,7 @@ class ApproachObjectProcedure:
         "zmax": 1.5,
     }
     PATIENCE = 20
-    GRASP_OPTIMIZATION_TIME = 3
+    GRASP_OPTIMIZATION_TIME = 5
     GIVE_BACK_TCP = np.array(
         [
             [0.0, 0.0, -1.0, -0.75],
@@ -82,7 +82,7 @@ class ApproachObjectProcedure:
 
         self.stopwatch = None
         self.grasp_tcp = None
-        self.give_back_tcp = None
+        self.give_back_tcp = self.GIVE_BACK_TCP
         self.grasping = False
 
         logger.info("Approach object: Ready!")
@@ -149,7 +149,7 @@ class ApproachObjectProcedure:
         tcp = compute_approach_pose(target.x, target.y, target.z)
         self.ur5e.move_to_tcp_pose(tcp)
 
-        if self.ur5e.is_at_tcp_pose(tcp, pos_tol=0.02, rot_tol=20):
+        if self.ur5e.is_at_tcp_pose(tcp, pos_tol=0.25, rot_tol=None):
             return States.REACHING
 
         return States.APPROACHING
@@ -196,7 +196,7 @@ class ApproachObjectProcedure:
         self.ur5e.move_to_tcp_pose(self.tcp_rest)
         if self.ur5e.is_at_tcp_pose(self.tcp_rest):
             if self.ur5e.is_holding_an_object:
-
+                self.stopwatch = time.time()
                 return States.GIVE_BACK
             else:
                 self.ur5e.open_gripper()
@@ -204,8 +204,14 @@ class ApproachObjectProcedure:
         return States.RETRACT
 
     def give_back(self):
+        if self.stopwatch is None:
+            self.stopwatch = time.time()
+
         self.ur5e.move_to_tcp_pose(self.give_back_tcp)
-        if self.ur5e.is_at_tcp_pose(self.give_back_tcp):
+        if (
+            self.ur5e.is_at_tcp_pose(self.give_back_tcp, rot_tol=None)
+            or time.time() - self.stopwatch > 10
+        ):
             self.ur5e.open_gripper()
             return States.RESTING
         return States.GIVE_BACK
