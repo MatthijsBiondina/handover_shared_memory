@@ -47,7 +47,7 @@ class SAMPlotter:
         self.config = load_config()
         self.participant = participant
         self.readers = Readers(participant)
-        self.web_streamer = WebImageStreamer(title="SAM", port=5006)
+        self.web_streamer = WebImageStreamer(title="SAM", port=5000)
         logger.info("SAMPlotter: Ready!")
 
     def run(self):

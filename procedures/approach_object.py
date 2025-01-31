@@ -10,6 +10,7 @@ from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl.curobo.collision_spheres_sample import CuroboCollisionSpheresSample
 from cyclone.idl.defaults.boolean_idl import StateSample
+from cyclone.idl.defaults.float_idl import FloatSample
 from cyclone.idl.procedures.coordinate_sample import CoordinateSample
 from cyclone.idl.ur5e.tcp_pose_sample import TCPPoseSample
 from cyclone.patterns.ddsreader import DDSReader
@@ -38,6 +39,11 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.GRASP_TCP_POSE,
             idl_dataclass=TCPPoseSample,
         )
+        self.magtouch = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.MAGTOUCH_PROCESSED,
+            idl_dataclass=FloatSample,
+        )
 
 
 class Writers:
@@ -62,6 +68,7 @@ class ApproachObjectProcedure:
         "zmax": 1.5,
     }
     PATIENCE = 20
+    MAG_THRESHOLD = 20
     GRASP_OPTIMIZATION_TIME = 5
     GIVE_BACK_TCP = np.array(
         [
@@ -199,8 +206,11 @@ class ApproachObjectProcedure:
         self.ur5e.move_to_tcp_pose(self.tcp_rest)
         if self.ur5e.is_at_tcp_pose(self.tcp_rest):
             if self.ur5e.is_holding_an_object:
-                self.stopwatch = time.time()
-                return States.GIVE_BACK
+                if self.magtouch() > self.MAG_THRESHOLD:
+                    return States.RETRACT
+                else:
+                    self.stopwatch = time.time()
+                    return States.GIVE_BACK
             else:
                 self.ur5e.open_gripper()
                 return States.RESTING
@@ -215,8 +225,9 @@ class ApproachObjectProcedure:
             self.ur5e.is_at_tcp_pose(self.give_back_tcp, rot_tol=5)
             or time.time() - self.stopwatch > 10
         ):
-            self.ur5e.open_gripper()
-            return States.RESTING
+            if self.magtouch() > self.MAG_THRESHOLD:
+                self.ur5e.open_gripper()
+                return States.RESTING
         return States.GIVE_BACK
 
     def is_target_in_workspace(self, target, zmin=0.2, cone=45, max_dist=1.0):
@@ -236,6 +247,12 @@ class ApproachObjectProcedure:
             return False
 
         return True
+
+    def magtouch(self) -> float:
+        mag = self.readers.magtouch()
+        if mag is None:
+            raise ContinueException
+        return mag.value
 
 
 if __name__ == "__main__":

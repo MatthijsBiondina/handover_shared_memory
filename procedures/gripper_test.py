@@ -56,8 +56,10 @@ class GripperTestProcedure:
 
     def run(self, interval=10):
         while True:
-            # self.ur5e.open_gripper()
-            # sys.exit(0)
+            self.ur5e.open_gripper()
+            time.sleep(5)
+            self.ur5e.close_gripper()
+            sys.exit(0)
             try:
                 self.ur5e.close_gripper()
                 time.sleep(interval)

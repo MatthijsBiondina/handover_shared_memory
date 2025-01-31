@@ -30,3 +30,6 @@ class CYCLONE_NAMESPACE:
 
     GRASP_TCP_POSE = "grasp.tcp_pose"
     STATE_MACHINE_STATE = "grasp.optimizer_running"
+
+    MAGTOUCH_RAW = "MagTouchRaw0"
+    MAGTOUCH_PROCESSED = "magtouch.processed"
