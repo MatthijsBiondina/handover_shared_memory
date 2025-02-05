@@ -60,6 +60,10 @@ class UR5eRobotArm:
         self.sophie = URrtde(self.config.ip_sophie, URrtde.UR3E_CONFIG)
         self.sophie.gripper = Robotiq2F85(self.config.ip_sophie)
 
+        self.sophie.gripper.move(0.05).wait()
+        self.sophie.gripper.open().wait()
+        
+
         # Cyclone setup
         self.participant = participant
         self.readers = Readers(participant)
@@ -105,9 +109,6 @@ class UR5eRobotArm:
             ):
                 self.is_holding_object = True
                 self.__cancel_gripper_action()
-                # self.__gripper_action = self.sophie.gripper.move(
-                #     current_width, force=100
-                # )
 
         else:
             try:

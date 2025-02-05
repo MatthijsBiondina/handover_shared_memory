@@ -69,7 +69,7 @@ class ApproachObjectProcedure:
     }
     PATIENCE = 20
     MAG_THRESHOLD = 20
-    GRASP_OPTIMIZATION_TIME = 5
+    GRASP_OPTIMIZATION_TIME = 4
     GIVE_BACK_TCP = np.array(
         [
             [0.0, 0.0, -1.0, -0.75],

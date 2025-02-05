@@ -47,7 +47,7 @@ python -m decisions.select_target_object &
 # python -m visualization.kalmanplotter &
 # python -m visualization.target_plotter &
 # python -m visualization.magtouchplotter &
-# python -m visualization.gripperplotter &
+python -m visualization.gripperplotter &
 python -m visualization.sam_plotter &
 
 python -m procedures.approach_object &
