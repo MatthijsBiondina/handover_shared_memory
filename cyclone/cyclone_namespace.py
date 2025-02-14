@@ -16,10 +16,16 @@ class CYCLONE_NAMESPACE:
     D405_FRAME = "d405.frame"
     D405_POINTCLOUD = "d405.pointcloud"
 
+    ZED_FRAME = "zed.frame"
+    ZED_POINTCLOUD = "zed.pointcloud"
+
     MEDIAPIPE_POSE = "mediapipe.pose"
     MEDIAPIPE_HAND = "mediapipe.hand"
+    ZED_MEDIAPIPE = "mediapipe.zed.hand"
 
-    YOLO = "yolo"
+    YOLO_D405 = "yolo.d405"
+    YOLO_ZED = "yolo.zed"
+    YOLO_PERSON = "yolo.person"
 
     KALMAN_OBJECTS = "kalman.objects"
     KALMAN_HANDS = "kalman.hands"

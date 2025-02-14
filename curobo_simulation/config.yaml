@@ -1,7 +1,7 @@
 robot_config_relative_path: "content/configs/robot/ur5e_robotiq_2f_85.yml"
 
-# dt: 0.025
-dt: 0.04
+dt: 0.025
+# dt: 0.04
 num_seeds: 1
 max_planning_time: 0.1
 

@@ -44,6 +44,11 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.MAGTOUCH_PROCESSED,
             idl_dataclass=FloatSample,
         )
+        self.person = DDSReader(
+            domain_participant=participant,
+            topic_name=CYCLONE_NAMESPACE.ZED_MEDIAPIPE,
+            idl_dataclass=CoordinateSample,
+        )
 
 
 class Writers:
@@ -69,7 +74,7 @@ class ApproachObjectProcedure:
     }
     PATIENCE = 20
     MAG_THRESHOLD = 20
-    GRASP_OPTIMIZATION_TIME = 4
+    GRASP_OPTIMIZATION_TIME = 6
     GIVE_BACK_TCP = np.array(
         [
             [0.0, 0.0, -1.0, -0.75],
@@ -174,7 +179,7 @@ class ApproachObjectProcedure:
                 tcp = compute_approach_pose(target.x, target.y, target.z)
                 self.ur5e.move_to_tcp_pose(tcp)
         else:
-            if self.grasp_tcp is None:
+            if self.grasp_tcp is None:  # todo: test dynamic grasp
                 grasp = self.readers.grasp()
                 if grasp is None:
                     if dt > self.GRASP_OPTIMIZATION_TIME + self.PATIENCE:
@@ -182,9 +187,12 @@ class ApproachObjectProcedure:
                     else:
                         raise ContinueException
                 self.grasp_tcp = np.array(grasp.pose)
-                self.give_back_tcp = np.array(grasp.pose)
+                self.give_back_tcp = None
+
+            # grasp = self.readers.grasp() # dynamic grasp
+            # self.grasp_tcp = np.array(grasp.pose)
             self.ur5e.move_to_tcp_pose(self.grasp_tcp)
-            if self.ur5e.is_at_tcp_pose(self.grasp_tcp, pos_tol=0.01, rot_tol=None):
+            if self.ur5e.is_at_tcp_pose(self.grasp_tcp, pos_tol=0.001, rot_tol=None):
                 return States.GRASPING
             if dt > self.GRASP_OPTIMIZATION_TIME + 5:
                 return States.GRASPING
@@ -216,21 +224,37 @@ class ApproachObjectProcedure:
                 return States.RESTING
         return States.RETRACT
 
-    def give_back(self):
+    def give_back(self, give_back_distance=0.4):
         if self.stopwatch is None:
             self.stopwatch = time.time()
+        if self.give_back_tcp is None:
+            person: CoordinateSample = self.readers.person()
+            if person is None or person.timestamp - time.time() > 10:
+                self.give_back_tcp = self.GIVE_BACK_TCP
+            else:
+                current_xyz = self.ur5e.tcp_pose[:3, 3]
+                person_xyz = np.array([person.x, person.y, person.z])
+
+                vector = person_xyz - current_xyz
+                vector /= np.linalg.norm(vector)
+
+                give_back_xyz = person_xyz - give_back_distance * vector
+                give_back_xyz[2] = max(give_back_xyz[2], 0.35)
+                give_back_xyz[0] = max(-0.75, give_back_xyz[0])
+
+                self.give_back_tcp = self.ur5e.look_at(give_back_xyz, person_xyz)
 
         self.ur5e.move_to_tcp_pose(self.give_back_tcp)
         if (
-            self.ur5e.is_at_tcp_pose(self.give_back_tcp, rot_tol=5)
-            or time.time() - self.stopwatch > 10
+            self.ur5e.is_at_tcp_pose(self.give_back_tcp, pos_tol=0.05, rot_tol=20)
+            or time.time() - self.stopwatch > 3
         ):
             if self.magtouch() > self.MAG_THRESHOLD:
                 self.ur5e.open_gripper()
                 return States.RESTING
         return States.GIVE_BACK
 
-    def is_target_in_workspace(self, target, zmin=0.2, cone=45, max_dist=1.0):
+    def is_target_in_workspace(self, target, zmin=0.0, cone=45, max_dist=1.0):
         if target is None:
             return False
         if time.time() - target.timestamp > self.PATIENCE:

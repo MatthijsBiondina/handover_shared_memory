@@ -15,7 +15,7 @@ class Readers:
     def __init__(self, participant: CycloneParticipant):
         self.yolo = SMReader(
             domain_participant=participant,
-            topic_name=CYCLONE_NAMESPACE.YOLO,
+            topic_name=CYCLONE_NAMESPACE.YOLO_D405,
             idl_dataclass=YOLOIDL(),
         )
 

@@ -55,8 +55,8 @@ class SegmentAnything:
         self.device = torch.device("cuda")
 
         # placeholders
-        self.xrange = torch.arange(Config.width).to(self.device)
-        self.yrange = torch.arange(Config.height).to(self.device)
+        self.xrange = torch.arange(Config.W_d405).to(self.device)
+        self.yrange = torch.arange(Config.H_d405).to(self.device)
 
         logger.info("SegmentAnything: Ready!")
 

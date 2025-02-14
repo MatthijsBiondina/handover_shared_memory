@@ -17,11 +17,16 @@ logger = get_logger()
 
 class Readers:
     def __init__(self, participant: CycloneParticipant):
-        self.hands = SMReader(
+        self.d405 = SMReader(
             participant,
             topic_name=CYCLONE_NAMESPACE.MEDIAPIPE_POSE,
             idl_dataclass=MediapipeIDL(),
         )
+        # self.zed = SMReader(
+        #     participant,
+        #     topic_name=CYCLONE_NAMESPACE.ZED_HANDS,
+        #     idl_dataclass=MediapipeIDL(),
+        # )
 
 
 class Writers:
@@ -53,25 +58,29 @@ class KalmanHands:
     def run(self):
         while True:
             try:
-                sample: MediapipeIDL = self.readers.hands()
-                if sample is None:
-                    raise ContinueException
-                if sample.timestamp <= self.timestamp:
-                    raise ContinueException
-                dt = sample.timestamp - self.timestamp
-                self.timestamp = sample.timestamp
-                y = self.preprocess_measurement(sample)
+                # samples = [self.readers.d405(), self.readers.zed()]
+                samples = [self.readers.d405()]
+                samples = [s for s in samples if s is not None]
+                samples = sorted(samples, key=lambda s: s.timestamp.item())
+                for sample in samples:
+                    if sample is None:
+                        continue
+                    if sample.timestamp <= self.timestamp:
+                        continue
+                    dt = sample.timestamp - self.timestamp
+                    self.timestamp = sample.timestamp
+                    y = self.preprocess_measurement(sample)
 
-                self.motion_update(dt)
-                self.add_new_measurements(y)
-                self.landmark_association()
+                    self.motion_update(dt)
+                    self.add_new_measurements(y)
+                    self.landmark_association()
 
-                msg = KalmanSample(
-                    timestamp=sample.timestamp,
-                    mean=[mu.tolist() for mu in self.mean],
-                    covariance=[Sigma.tolist() for Sigma in self.covariance],
-                )
-                self.writers.hand_centroids(msg)
+                    msg = KalmanSample(
+                        timestamp=sample.timestamp,
+                        mean=[mu.tolist() for mu in self.mean],
+                        covariance=[Sigma.tolist() for Sigma in self.covariance],
+                    )
+                    self.writers.hand_centroids(msg)
             except ContinueException:
                 pass
             finally:

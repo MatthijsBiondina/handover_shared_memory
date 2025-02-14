@@ -3,8 +3,11 @@ from cyclonedds.util import duration
 from sympy.physics.units import millisecond, milli
 
 class Config:
-    height: int=848
-    width: int=480
+    H_d405: int=848
+    W_d405: int=480
+
+    H_zed: int = 720
+    W_zed: int = 1280
 
 class CYCLONE_DEFAULTS:
     QOS = Qos(

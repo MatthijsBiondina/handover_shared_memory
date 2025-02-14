@@ -4,20 +4,15 @@ import os
 
 import numpy as np
 
-from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import ContinueException
 from cantrips.logging.logger import get_logger
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
-from cyclone.idl_shared_memory.frame_idl import FrameIDL
-from cyclone.idl_shared_memory.mediapipe_idl import MediapipeIDL
 from cyclone.idl_shared_memory.points_idl import PointsIDL
 from cyclone.idl_shared_memory.yolo_idl import YOLOIDL
 from cyclone.patterns.sm_reader import SMReader
 from ultralytics import YOLO
 import ultralytics
-
-
 from cyclone.patterns.sm_writer import SMWriter
 
 logger = get_logger()
@@ -42,7 +37,7 @@ class Writers:
         )
 
 
-class YOLOLabeler:
+class ZedYOLO:
     def __init__(self, participant: CycloneParticipant):
         self.participant = participant
         self.readers = Readers(participant)
@@ -53,9 +48,6 @@ class YOLOLabeler:
 
         with open(f"{os.path.dirname(__file__)}/../config/yolo_names.json", "w+") as f:
             json.dump(self.yolo_model.names, f, indent=2)
-        
-        # for name in self.yolo_model.names.values():
-        #     logger.info(name)
 
         logger.info("YOLOLabeler: Ready!")
 
@@ -77,24 +69,16 @@ class YOLOLabeler:
                     for o in objects_bot:
                         o["bbox"] += np.array([0.0, h - w, 0.0, h - w])
                     objects.extend(objects_bot)
-
-                objects_array = self.organize_objects_in_array(objects)
-                objects_uv = np.stack(
-                    (
-                        (objects_array[:, 0] + objects_array[:, 2]) / 2,
-                        (objects_array[:, 1] + objects_array[:, 3]) / 2,
-                    ),
-                    axis=-1,
-                ).astype(int)
-                objects_xyz = frame.points[objects_uv[:, 1], objects_uv[:, 0]]
+                objects_array = self.pad_objects(objects)
 
                 msg = YOLOIDL(
                     timestamp=frame.timestamp,
+                    color=frame.color,
+                    depth=frame.depth,
+                    points=frame.points,
                     extrinsics=frame.extrinsics,
                     intrinsics=frame.intrinsics,
-                    objects=self.pad_array(objects_array),
-                    uv=self.pad_array(objects_uv),
-                    xyz=self.pad_array(objects_xyz),
+                    objects=objects_array,
                 )
                 self.writers.yolo(msg)
             except ContinueException:
@@ -118,10 +102,9 @@ class YOLOLabeler:
 
         return objects
 
-    def organize_objects_in_array(self, objects):
+    def pad_objects(self, objects):
         objects = sorted(objects, key=lambda o: o["conf"], reverse=True)
-        N = min(len(objects), self.MAX_NR_OF_OBJECTS)
-        object_array = np.full((N, 6), np.nan, dtype=np.float32)
+        object_array = np.full((self.MAX_NR_OF_OBJECTS, 6), np.nan, dtype=np.float32)
         for ii in range(len(objects)):
             try:
                 object_array[ii, :4] = objects[ii]["bbox"]
@@ -132,15 +115,8 @@ class YOLOLabeler:
 
         return object_array
 
-    def pad_array(self, arr: np.ndarray):
-        arr_padded = np.full(
-            (self.MAX_NR_OF_OBJECTS, arr.shape[1]), np.nan, dtype=arr.dtype
-        )
-        arr_padded[: arr.shape[0]] = arr
-        return arr_padded
-
 
 if __name__ == "__main__":
-    participant = CycloneParticipant(rate_hz=5)
-    node = YOLOLabeler(participant)
+    participant = CycloneParticipant()
+    node = ZedYOLO(participant)
     node.run()

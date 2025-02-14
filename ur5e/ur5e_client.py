@@ -9,6 +9,7 @@ from cantrips.debugging.terminal import pyout
 from cantrips.exceptions import WaitingForFirstMessageException
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
+from cyclone.idl.curobo.collision_spheres_sample import CuroboCollisionSpheresSample
 from cyclone.idl.ur5e.gripper_width_sample import GripperWidthSample
 from cyclone.idl.ur5e.joint_configuration_sample import JointConfigurationSample
 from cyclone.idl.ur5e.tcp_pose_sample import TCPPoseSample
@@ -142,7 +143,7 @@ class Ur5eClient:
 
         if wait:
             t0 = time.time()
-            while not self.is_at_tcp_pose(target_pose) and time.time() - t0 < timeout:
+            while not self.is_at_tcp_pose(target_pose, rot_tol=5) and time.time() - t0 < timeout:
                 self.participant.sleep()
 
         return self.is_at_tcp_pose(target_pose)
@@ -209,3 +210,14 @@ class Ur5eClient:
         tcp[:3, 3] = position
 
         return tcp
+
+    def wait_for_planner_initialization(self):
+        reader = DDSReader(domain_participant=self.participant,
+                           topic_name=CYCLONE_NAMESPACE.CUROBO_COLLISION_SPHERES,
+                           idl_dataclass=CuroboCollisionSpheresSample)
+        while True:
+            spheres = reader()
+            if spheres is not None:
+                break
+            self.participant.sleep()
+        return

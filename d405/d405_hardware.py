@@ -57,12 +57,12 @@ class D405:
         profile = pipeline.start()
         device = profile.get_device()
         sensors = device.query_sensors()
-        for sensor in sensors:
-            if sensor.is_color_sensor():
-                sensor.set_option(rs2.option.enable_auto_exposure, 0)
-                sensor.set_option(rs2.option.exposure, 5000)
-                sensor.set_option(rs2.option.gain, 64)
-                sensor.set_option(rs2.option.brightness, 64)
+        # for sensor in sensors:
+            # if sensor.is_color_sensor():
+                # sensor.set_option(rs2.option.enable_auto_exposure, 0)
+                # sensor.set_option(rs2.option.exposure, 5000)
+                # sensor.set_option(rs2.option.gain, 64)
+                # sensor.set_option(rs2.option.brightness, 64)
 
         align = rs2.align(rs2.stream.color)
 

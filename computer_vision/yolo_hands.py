@@ -5,6 +5,7 @@ from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl_shared_memory.mediapipe_idl import MediapipeIDL
 from cyclone.idl_shared_memory.points_idl import PointsIDL
+from cyclone.idl_shared_memory.zed_points_idl import ZedPointsIDL
 from cyclone.patterns.sm_reader import SMReader
 from cyclone.patterns.sm_writer import SMWriter
 from ultralytics import YOLO
@@ -13,7 +14,7 @@ import mediapipe as mp
 
 class Readers:
     def __init__(self, participant: CycloneParticipant):
-        self.points = SMReader(
+        self.d405 = SMReader(
             domain_participant=participant,
             topic_name=CYCLONE_NAMESPACE.D405_POINTCLOUD,
             idl_dataclass=PointsIDL(),
@@ -65,40 +66,40 @@ class YOLOHands:
     def run(self):
         while True:
             try:
-                points: PointsIDL = self.readers.points()
-                if points is None:
-                    raise ContinueException
-                uv_yolo, xyz_yolo = self.find_hands_with_yolo(points)
-                uv_mp, xyz_mp = self.find_hands_with_mediapipe(points)
-
-                uv = np.concatenate((uv_yolo, uv_mp), axis=0)
-                xyz = np.concatenate((xyz_yolo, xyz_mp), axis=0)
-                if uv.shape[0] > 8:
-                    uv = uv[:8]
-                    xyz = xyz[:8]
-
-                uv_msg = np.full((8, 2), np.nan, dtype=np.float32)
-                xyz_msg = np.full((8, 3), np.nan, dtype=np.float32)
-                uv_msg[: uv.shape[0]] = uv
-                xyz_msg[: xyz.shape[0]] = xyz
-
-                msg = MediapipeIDL(
-                    timestamp=points.timestamp,
-                    color=points.color,
-                    depth=points.depth,
-                    points=points.points,
-                    extrinsics=points.extrinsics,
-                    intrinsics=points.intrinsics,
-                    uv=uv_msg,
-                    xyz=xyz_msg,
-                )
-                self.writers.pose(msg)
+                self.process_d405()
             except ContinueException:
                 pass
             except ValueError:
                 pass
             finally:
                 self.participant.sleep()
+
+    def process_d405(self):
+        points: PointsIDL = self.readers.d405()
+        if points is None:
+            raise ContinueException
+        uv_yolo, xyz_yolo = self.find_hands_with_yolo(points)
+        uv_mp, xyz_mp = self.find_hands_with_mediapipe(points)
+
+        uv = np.concatenate((uv_yolo, uv_mp), axis=0)
+        xyz = np.concatenate((xyz_yolo, xyz_mp), axis=0)
+        if uv.shape[0] > 8:
+            uv = uv[:8]
+            xyz = xyz[:8]
+
+        uv_msg = np.full((8, 2), np.nan, dtype=np.float32)
+        xyz_msg = np.full((8, 3), np.nan, dtype=np.float32)
+        uv_msg[: uv.shape[0]] = uv
+        xyz_msg[: xyz.shape[0]] = xyz
+
+        msg = MediapipeIDL(
+            timestamp=points.timestamp,
+            extrinsics=points.extrinsics,
+            intrinsics=points.intrinsics,
+            uv=uv_msg,
+            xyz=xyz_msg,
+        )
+        self.writers.pose(msg)
 
     def find_hands_with_yolo(self, points: PointsIDL):
         h, w, _ = points.color.shape
@@ -114,10 +115,6 @@ class YOLOHands:
                         "conf": box.conf.cpu().item(),
                     }
                 )
-
-        # todo: debug line
-        boxes = []
-
         if len(results_bot):
             for box in results_bot[0].boxes:
                 boxes.append(
@@ -168,14 +165,15 @@ class YOLOHands:
         if not len(landmarks):
             return np.empty((0, 2)), np.empty((0, 3))
 
-        uv = np.array(landmarks).astype(int)
-        xyz = []
-        for u, v in uv:
+        uv_ = np.array(landmarks).astype(int)
+        uv, xyz = [], []
+        for u, v in uv_:
             try:
                 xyz.append(points.points[v, u])
+                uv.append([u, v])
             except IndexError:
                 pass
-        xyz = np.array(xyz)
+        uv, xyz = np.array(uv), np.array(xyz)
 
         if uv.shape[0] == 0:
             uv = np.empty((0, 2), dtype=np.float32)
@@ -184,6 +182,6 @@ class YOLOHands:
 
 
 if __name__ == "__main__":
-    participant = CycloneParticipant()
+    participant = CycloneParticipant(rate_hz=5)
     node = YOLOHands(participant)
     node.run()

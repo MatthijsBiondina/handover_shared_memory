@@ -7,12 +7,15 @@ from torch.cuda import device
 
 from cantrips.configs import load_config
 from cantrips.debugging.terminal import UGENT, hex2rgb, pyout
+from cantrips.exceptions import ContinueException
 from cantrips.logging.logger import get_logger
 from computer_vision.meshgridcache import MeshgridCache
 from cyclone.cyclone_namespace import CYCLONE_NAMESPACE
 from cyclone.cyclone_participant import CycloneParticipant
 from cyclone.idl_shared_memory.frame_idl import FrameIDL
 from cyclone.idl_shared_memory.points_idl import PointsIDL
+from cyclone.idl_shared_memory.zed_idl import ZEDIDL
+from cyclone.idl_shared_memory.zed_points_idl import ZedPointsIDL
 from cyclone.patterns.sm_reader import SMReader
 from cyclone.patterns.sm_writer import SMWriter
 
@@ -24,15 +27,26 @@ class Readers:
             topic_name=CYCLONE_NAMESPACE.D405_FRAME,
             idl_dataclass=FrameIDL(),
         )
+        # self.zed = SMReader(
+        #     domain_participant=participant,
+        #     topic_name=CYCLONE_NAMESPACE.ZED_FRAME,
+        #     idl_dataclass=ZEDIDL(),
+        # )
 
 
 class Writers:
     def __init__(self, participant: CycloneParticipant):
-        self.points = SMWriter(
+        self.d405 = SMWriter(
             domain_participant=participant,
             topic_name=CYCLONE_NAMESPACE.D405_POINTCLOUD,
             idl_dataclass=PointsIDL(),
         )
+        # self.zed = SMWriter(
+        #     domain_participant=participant,
+        #     topic_name=CYCLONE_NAMESPACE.ZED_POINTCLOUD,
+        #     idl_dataclass=ZedPointsIDL(),
+        # )
+        
 
 
 logger = get_logger()
@@ -49,23 +63,49 @@ class PointClouds:
 
     def run(self):
         while True:
-            frame = self.readers.d405()
-            masked_depth = self.apply_finger_mask(frame)
-            pointcloud = self.back_project(
-                masked_depth, frame.intrinsics, frame.extrinsics
-            )
-            self.writers.points(
-                PointsIDL(
-                    timestamp=frame.timestamp,
-                    color=frame.color,
-                    depth=frame.depth,
-                    points=pointcloud,
-                    extrinsics=frame.extrinsics,
-                    intrinsics=frame.intrinsics,
-                )
-            )
+            try:
+                self.process_d405_frame()
+                # self.process_zed_frame()
+            except ContinueException:
+                pass
+            finally:
+                self.participant.sleep()
 
-            self.participant.sleep()
+    def process_d405_frame(self):
+        frame = self.readers.d405()
+        if frame is None:
+            raise ContinueException
+        masked_depth = self.apply_finger_mask(frame)
+        pointcloud = self.back_project(masked_depth, frame.intrinsics, frame.extrinsics)
+        self.writers.d405(
+            PointsIDL(
+                timestamp=frame.timestamp,
+                color=frame.color,
+                depth=frame.depth,
+                points=pointcloud,
+                extrinsics=frame.extrinsics,
+                intrinsics=frame.intrinsics,
+            )
+        )
+
+    def process_zed_frame(self):
+        frame: ZEDIDL = self.readers.zed()
+        if frame is None:
+            raise ContinueException
+        pointcloud = self.back_project(
+            frame.depth, frame.intrinsics, frame.extrinsics, depth_scale=1.0
+        )
+        self.writers.zed(
+            ZedPointsIDL(
+                timestamp=frame.timestamp,
+                color=frame.color,
+                depth=frame.depth,
+                points=pointcloud,
+                extrinsics=frame.extrinsics,
+                intrinsics=frame.intrinsics
+            )
+        )
+        
 
     def apply_finger_mask(self, frame: FrameIDL):
         depth = frame.depth
@@ -75,7 +115,10 @@ class PointClouds:
 
     @staticmethod
     def back_project(
-        depth_: np.ndarray, intrinsics_: np.ndarray, extrinsics_: np.ndarray
+        depth_: np.ndarray,
+        intrinsics_: np.ndarray,
+        extrinsics_: np.ndarray,
+        depth_scale=CONFIG.depth_scale,
     ):
         """
         Converts a depth image to a point cloud in the world frame.
@@ -93,7 +136,7 @@ class PointClouds:
             extrinsics = tensor(extrinsics_, device=CONFIG.device, dtype=torch.float32)
 
             H, W = depth.shape
-            depth = depth * CONFIG.depth_scale
+            depth = depth * depth_scale
             depth[(depth == 0) | (depth > CONFIG.event_horizon)] = np.nan
 
             meshgrid = MeshgridCache().get_meshgrid((H, W))

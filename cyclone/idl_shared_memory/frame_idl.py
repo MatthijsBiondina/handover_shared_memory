@@ -28,7 +28,7 @@ class FrameIDL(BaseIDL):
         intrinsics (np.ndarray): A 3x3 array representing the intrinsic camera matrix (float64).
     """
     timestamp: np.ndarray = np.empty((1,), dtype=np.float64)
-    color: np.ndarray = np.empty((Config.height, Config.width, 3), dtype=np.uint8)
-    depth: np.ndarray = np.empty((Config.height, Config.width), dtype=np.uint16)
+    color: np.ndarray = np.empty((Config.H_d405, Config.W_d405, 3), dtype=np.uint8)
+    depth: np.ndarray = np.empty((Config.H_d405, Config.W_d405), dtype=np.uint16)
     extrinsics: np.ndarray = np.empty((4, 4), dtype=np.float64)
     intrinsics: np.ndarray = np.empty((3, 3), dtype=np.float64)

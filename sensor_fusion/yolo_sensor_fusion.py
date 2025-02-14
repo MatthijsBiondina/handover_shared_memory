@@ -18,11 +18,16 @@ from cyclone.patterns.sm_reader import SMReader
 
 class Readers:
     def __init__(self, participant: CycloneParticipant):
-        self.yolo = SMReader(
+        self.d405 = SMReader(
             domain_participant=participant,
-            topic_name=CYCLONE_NAMESPACE.YOLO,
+            topic_name=CYCLONE_NAMESPACE.YOLO_D405,
             idl_dataclass=YOLOIDL(),
         )
+        # self.zed = SMReader(
+        #     domain_participant=participant,
+        #     topic_name=CYCLONE_NAMESPACE.YOLO_ZED,
+        #     idl_dataclass=YOLOIDL(),
+        # )
 
 
 class Writers:
@@ -33,7 +38,9 @@ class Writers:
             idl_dataclass=KalmanSample,
         )
 
+
 logger = get_logger()
+
 
 class KalmanYOLO:
     CONFIDENCE_THRESHOLD = 0.2
@@ -56,50 +63,61 @@ class KalmanYOLO:
     def run(self):
         while True:
             try:
-                yolo_sample: YOLOIDL = self.readers.yolo()
-                if yolo_sample.timestamp <= self.timestamp:
-                    raise ContinueException
-                else:
-                    dt = yolo_sample.timestamp - self.timestamp
-                    self.timestamp = yolo_sample.timestamp
+                # samples = [self.readers.d405(), self.readers.zed()]
+                samples = [self.readers.d405()]
+                samples = [s for s in samples if s is not None]
+                samples = sorted(samples, key=lambda s: s.timestamp.item())
 
-                y = self.preprocess_measurement(yolo_sample)
+                for yolo_sample in samples:
+                    if yolo_sample.timestamp <= self.timestamp:
+                        continue
+                    else:
+                        dt = yolo_sample.timestamp - self.timestamp
+                        self.timestamp = yolo_sample.timestamp
 
-                self.motion_update(dt)
-                self.add_new_measurements(y)
-                self.landmark_association()
+                    y = self.preprocess_measurement(yolo_sample)
 
-                msg = KalmanSample(
-                    timestamp=yolo_sample.timestamp,
-                    mean=[mu.tolist() for mu in self.mean],
-                    covariance=[Sigma.tolist() for Sigma in self.covariance],
-                )
-                self.writers.kalman(msg)
+                    self.motion_update(dt)
+                    self.add_new_measurements(y)
+                    self.landmark_association()
+
+                    msg = KalmanSample(
+                        timestamp=yolo_sample.timestamp,
+                        mean=[mu.tolist() for mu in self.mean],
+                        covariance=[Sigma.tolist() for Sigma in self.covariance],
+                    )
+                    self.writers.kalman(msg)
             except ContinueException:
                 pass
             finally:
                 self.participant.sleep()
 
     def preprocess_measurement(self, yolo_sample: YOLOIDL):
-        objects = yolo_sample.objects
-        measurements = objects[~np.any(np.isnan(objects), axis=1)]
-        measurements = measurements[measurements[:, -1] > self.CONFIDENCE_THRESHOLD]
-
-        u = (measurements[:, 0] + measurements[:, 2]) / 2
-        v = (measurements[:, 1] + measurements[:, 3]) / 2
-
-        uv = np.stack((u, v), axis=1)
-        if uv.shape[0] == 0:
-            return np.empty((0, 3))
-
-        xyz = PointClouds.uv2xyz(uv, yolo_sample.depth, yolo_sample.points)
+        confidence_mask = yolo_sample.objects[:, -1] > self.CONFIDENCE_THRESHOLD
+        xyz = yolo_sample.xyz[confidence_mask]
         return xyz
+
+        # objects = yolo_sample.objects
+        # measurements = objects[~np.any(np.isnan(objects), axis=1)]
+        # measurements = measurements[measurements[:, -1] > self.CONFIDENCE_THRESHOLD]
+
+        # u = (measurements[:, 0] + measurements[:, 2]) / 2
+        # v = (measurements[:, 1] + measurements[:, 3]) / 2
+
+        # uv = np.stack((u, v), axis=1)
+        # if uv.shape[0] == 0:
+        #     return np.empty((0, 3))
+
+        # logger.info(f"\n{uv}\n{yolo_sample.uv}")
+
+        # xyz = PointClouds.uv2xyz(uv, yolo_sample.depth, yolo_sample.points)
+        # return xyz
 
     def motion_update(self, dt: float):
         R = np.eye(3) * (self.MOTION_NOISE_STD * dt) ** 2
         for idx in range(len(self.mean)):
             self.covariance[idx] += R
-        for idx in range(len(self.mean)-1, -1, -1):
+        for idx in range(len(self.mean) - 1, -1, -1):
             if np.any(np.diag(self.covariance[idx]) < self.MAX_UNCERTAINTY**2):
                 del self.covariance[idx]
                 del self.mean[idx]

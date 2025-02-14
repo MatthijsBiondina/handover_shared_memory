@@ -60,8 +60,8 @@ class UR5eRobotArm:
         self.sophie = URrtde(self.config.ip_sophie, URrtde.UR3E_CONFIG)
         self.sophie.gripper = Robotiq2F85(self.config.ip_sophie)
 
-        self.sophie.gripper.move(0.05).wait()
-        self.sophie.gripper.open().wait()
+        # # self.sophie.gripper.move(0.05).wait()
+        # self.sophie.gripper.open().wait()
         
 
         # Cyclone setup

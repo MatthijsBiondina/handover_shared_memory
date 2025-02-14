@@ -1,4 +1,5 @@
 import time
+import traceback
 import numpy as np
 import torch
 from torch import Tensor, tensor
@@ -87,18 +88,21 @@ class GraspPosePicker:
                 if not self.active:
                     self.init_optimizer(masks)
                     self.active = True
+                
+                try:
+                    solution = self.optimizer_step(masks)
+                    tcp = self.xyzrpy_to_matrix(solution).cpu().numpy()
 
-                solution = self.optimizer_step(masks)
-
-                tcp = self.xyzrpy_to_matrix(solution).cpu().numpy()
-
-                msg = TCPPoseSample(
-                    timestamp=masks.timestamp,
-                    pose=tcp.tolist(),
-                    velocity=np.zeros_like(tcp).tolist(),
-                )
-                self.writers.pose(msg)
-
+                    msg = TCPPoseSample(
+                        timestamp=masks.timestamp,
+                        pose=tcp.tolist(),
+                        velocity=np.zeros_like(tcp).tolist(),
+                    )
+                    self.writers.pose(msg)
+                except Exception as e:
+                    logger.error(f"Unexpected exception: {traceback.format_exc()}")
+                    self.init_optimizer(masks)
+                    
             except ContinueException:
                 self.participant.sleep()
                 pass
@@ -159,7 +163,7 @@ class GraspPosePicker:
         L_obsx = 30 * self.count_nr_of_points_between_fingers(
             tcp, obs, finger_height=0.06
         )
-        L_eigv = 0.1*self.eigen_loss(tcp, tgt)
+        L_eigv = 0.1 * self.eigen_loss(tcp, tgt)
 
         # logger.info(
         #     f"D: {L_dist[0]:.2f} | "
@@ -250,6 +254,7 @@ class GraspPosePicker:
         finger_width=0.03,
         finger_height=0.02,
         finger_distance=0.08,
+        finger_depth_offset=0.01,
     ) -> Tensor:
         """
         Count points that fall within the box-shaped area between gripper fingers.
@@ -286,7 +291,9 @@ class GraspPosePicker:
 
         x_mask = (P[..., 0] > -finger_distance / 2) & (P[..., 0] < finger_distance / 2)
         y_mask = (P[..., 1] > -finger_height / 2) & (P[..., 1] < finger_height / 2)
-        z_mask = (P[..., 2] > -finger_width) & (P[..., 2] < 0)
+        z_mask = (P[..., 2] > -finger_width - finger_depth_offset) & (
+            P[..., 2] < -finger_depth_offset
+        )
 
         count = torch.sum(x_mask & y_mask & z_mask, dim=-1)
         return count / cloud.shape[0]

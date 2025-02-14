@@ -73,7 +73,7 @@ class CharucoMeasurement:
     tcp_pose: np.ndarray
 
 
-class CalibrationProcedure:
+class D405CalibrationProcedure:
     """
     Orchestrates the calibration procedure for the robot and camera system.
 
@@ -260,6 +260,6 @@ if __name__ == "__main__":
     # Create a DDS participant
     participant = CycloneParticipant()
     # Initialize the calibration procedure
-    node = CalibrationProcedure(participant)
+    node = D405CalibrationProcedure(participant)
     # Run the calibration
     node.run()
