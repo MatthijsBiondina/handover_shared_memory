@@ -119,12 +119,12 @@ class UR5eRobotArm:
             if np.isclose(current_width, target_width, atol=0.001):
                 return  # If we're already at target width, do nothing
             elif target_width > current_width:
-                self.__gripper_action = self.sophie.gripper.move(target_width, force=25)
+                self.__gripper_action = self.sophie.gripper.move(target_width, force=50)
                 self.is_holding_object = (
                     False  # if we were holding something, we just released it
                 )
             elif target_width < current_width:
-                self.__gripper_action = self.sophie.gripper.move(target_width, force=25)
+                self.__gripper_action = self.sophie.gripper.move(target_width, force=50)
 
     def __cancel_gripper_action(self):
         if self.__gripper_action is None:

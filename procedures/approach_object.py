@@ -73,7 +73,7 @@ class ApproachObjectProcedure:
         "zmax": 1.5,
     }
     PATIENCE = 20
-    MAG_THRESHOLD = 20
+    MAG_THRESHOLD = 50 # 20
     GRASP_OPTIMIZATION_TIME = 6
     GIVE_BACK_TCP = np.array(
         [
@@ -240,14 +240,15 @@ class ApproachObjectProcedure:
 
                 give_back_xyz = person_xyz - give_back_distance * vector
                 give_back_xyz[2] = max(give_back_xyz[2], 0.35)
+                give_back_xyz[1] = np.clip(give_back_xyz[1], -0.4, 0.4)
                 give_back_xyz[0] = max(-0.75, give_back_xyz[0])
 
                 self.give_back_tcp = self.ur5e.look_at(give_back_xyz, person_xyz)
 
         self.ur5e.move_to_tcp_pose(self.give_back_tcp)
         if (
-            self.ur5e.is_at_tcp_pose(self.give_back_tcp, pos_tol=0.05, rot_tol=20)
-            or time.time() - self.stopwatch > 3
+            self.ur5e.is_at_tcp_pose(self.give_back_tcp, pos_tol=0.1, rot_tol=20)
+            or time.time() - self.stopwatch > 10
         ):
             if self.magtouch() > self.MAG_THRESHOLD:
                 self.ur5e.open_gripper()
@@ -260,6 +261,8 @@ class ApproachObjectProcedure:
         if time.time() - target.timestamp > self.PATIENCE:
             return False
 
+        if target.x > -0.3:
+            return False
         if target.z < zmin:
             return False
         tgt = np.array([target.x, target.y, target.z, 1.0])

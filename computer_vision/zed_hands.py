@@ -73,12 +73,9 @@ class ZedMediapipe:
 
         if person is None:
             return
-        
+
         msg = CoordinateSample(
-            timestamp=time.time(),
-            x = person[0],
-            y = person[1],
-            z = person[2]
+            timestamp=time.time(), x=person[0], y=person[1], z=person[2]
         )
         self.writers.pose(msg)
 
@@ -98,11 +95,10 @@ class ZedMediapipe:
                 V = V[mask]
                 if U.shape[0] == 0:
                     return None
-                
+
                 for u, v in zip(U, V):
                     img = cv2.circle(img, (u, v), 5, hex2rgb(UGENT.GREEN), -1)
                 self.webstreamer.update_frame(img)
-
 
                 XYZ = PointClouds.back_project(
                     points.depth, points.intrinsics, points.extrinsics, depth_scale=1

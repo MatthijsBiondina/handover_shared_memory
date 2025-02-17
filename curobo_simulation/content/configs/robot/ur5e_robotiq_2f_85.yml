@@ -59,6 +59,7 @@ robot_cfg:
       'right_inner_finger_pad',
     ] # List[str]
     collision_spheres:
+      
       shoulder_link:
         - "center": [0.0, 0.0, 0.0]
           "radius": 0.1

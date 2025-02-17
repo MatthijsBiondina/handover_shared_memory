@@ -188,7 +188,7 @@ class Ur5eClient:
             return pos_diff <= pos_tol and rot_diff_deg <= rot_tol
 
     def close_gripper(self):
-        self.writers.gripper_width(GripperWidthSample(time.time(), 0.005, 0.001))
+        self.writers.gripper_width(GripperWidthSample(time.time(), 0.004, 5.0))
 
     def open_gripper(self):
         self.writers.gripper_width(GripperWidthSample(time.time(), 0.08, 1.0))
