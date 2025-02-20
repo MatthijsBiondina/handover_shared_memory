@@ -76,7 +76,7 @@ class KalmanPlotter:
                 xyz.append(mu)
         return np.array(xyz)
 
-    def draw_objects(self, img: np.ndarray, objects: np.ndarray, color=UGENT.BLUE):
+    def draw_objects(self, img: np.ndarray, objects: np.ndarray, color=UGENT.YELLOW):
         for u, v in objects:
             img = cv2.circle(
                 img, (u, v), radius=5, color=hex2rgb(color), thickness=-1

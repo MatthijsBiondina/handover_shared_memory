@@ -6,7 +6,7 @@
             "type": "debugpy",
             "request": "launch",
             "python": "${command:python.interpreterPath}",
-            "program": "${workspaceFolder}/procedures/approach_objectpy",
+            "program": "${workspaceFolder}/visualization/target_plotter.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {

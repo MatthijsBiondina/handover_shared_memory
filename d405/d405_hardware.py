@@ -52,8 +52,8 @@ class D405:
     def __init_d405(self):
         pipeline = rs2.pipeline()
         config = rs2.config()
-        config.enable_stream(rs2.stream.color, 640, 480, rs2.format.bgr8, 15)
-        config.enable_stream(rs2.stream.depth, 640, 480, rs2.format.z16, 15)
+        config.enable_stream(rs2.stream.color, 640, 480, rs2.format.bgr8, 30)
+        config.enable_stream(rs2.stream.depth, 640, 480, rs2.format.z16, 30)
         profile = pipeline.start()
         device = profile.get_device()
         sensors = device.query_sensors()
@@ -120,6 +120,6 @@ class D405:
 
 
 if __name__ == "__main__":
-    participant = CycloneParticipant()
+    participant = CycloneParticipant(rate_hz=30)
     node = D405(participant)
     node.run()

@@ -62,19 +62,19 @@ class ZEDPlotter:
                 if frame is None:
                     raise WaitingForFirstMessageException
                 img = frame.color
-                img = self.draw_charuco(img, frame.intrinsics)
+                # img = self.draw_charuco(img, frame.intrinsics)
 
-                target: CoordinateSample = self.readers.target()
-                if target is not None:
-                    img = self.draw_keypoint(img, frame, target)
+                # target: CoordinateSample = self.readers.target()
+                # if target is not None:
+                #     img = self.draw_keypoint(img, frame, target)
 
                 person: CoordinateSample = self.readers.person()
                 if person is not None:
-                    img = self.draw_keypoint(img, frame, person, color=UGENT.GREEN)
+                    img = self.draw_keypoint(img, frame, person, color=UGENT.RED)
 
-                hands: KalmanSample = self.readers.hands()
-                if hands is not None:
-                    img = self.draw_hands(img, frame, hands)
+                # hands: KalmanSample = self.readers.hands()
+                # if hands is not None:
+                #     img = self.draw_hands(img, frame, hands)
 
                 self.web_streamer.update_frame(img)
 

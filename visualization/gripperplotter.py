@@ -25,7 +25,7 @@ class GripperPlotter:
     def __init__(self, participant: CycloneParticipant):
         self.participant = participant
         self.readers = Readers(participant)
-        self.web_streamer = WebImageStreamer(title="Gripper Plot", port=5011)
+        self.web_streamer = WebImageStreamer(title="Gripper Plot", port=5007)
 
         self.width, self.height = 800, 600
         

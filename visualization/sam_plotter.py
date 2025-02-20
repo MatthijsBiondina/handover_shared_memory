@@ -52,7 +52,7 @@ class D405Plotter:
         self.config = load_config()
         self.participant = participant
         self.readers = Readers(participant)
-        self.web_streamer = WebImageStreamer(title="d405", port=5000)
+        self.web_streamer = WebImageStreamer(title="d405", port=5006)
         logger.info("D405Plotter: Ready!")
 
     def run(self):
@@ -68,17 +68,17 @@ class D405Plotter:
                 if masks is not None:
                     img = self.overlay_masks(img, masks)
 
-                target: CoordinateSample = self.readers.target()
-                if target is not None:
-                    img = self.draw_target(img, frame, target)
+                # target: CoordinateSample = self.readers.target()
+                # if target is not None:
+                #     img = self.draw_target(img, frame, target)
 
-                person: CoordinateSample = self.readers.person()
-                if person is not None:
-                    img = self.draw_target(img, frame, person, color=UGENT.GREEN)
+                # person: CoordinateSample = self.readers.person()
+                # if person is not None:
+                #     img = self.draw_target(img, frame, person, color=UGENT.GREEN)
 
-                hands: KalmanSample = self.readers.hands()
-                if hands is not None:
-                    img = self.draw_hands(img, frame, hands)
+                # hands: KalmanSample = self.readers.hands()
+                # if hands is not None:
+                #     img = self.draw_hands(img, frame, hands)
             except ContinueException:
                 pass
             finally:
@@ -87,14 +87,14 @@ class D405Plotter:
 
     def overlay_masks(self, img: np.ndarray, masks: MasksIDL) -> np.ndarray:
         img[masks.mask_object] = (
-            0.5 * img[masks.mask_object] + 0.5 * np.array(hex2rgb(UGENT.BLUE))
+            0.5 * img[masks.mask_object] + 0.5 * np.array(hex2rgb(UGENT.YELLOW))
         ).astype(np.uint8)
         img[masks.mask_hand] = (
-            0.5 * img[masks.mask_hand] + 0.5 * np.array(hex2rgb(UGENT.PINK))
+            0.5 * img[masks.mask_hand] + 0.5 * np.array(hex2rgb(UGENT.RED))
         ).astype(np.uint8)
         return img
 
-    def draw_target(self, img: np.ndarray, frame: FrameIDL, target: CoordinateSample, color=UGENT.PURPLE):
+    def draw_target(self, img: np.ndarray, frame: FrameIDL, target: CoordinateSample, color=UGENT.YELLOW):
         obj_xyz = np.array([[target.x, target.y, target.z]])
         obj_uv = PointClouds.xyz2uv(obj_xyz, frame.intrinsics, frame.extrinsics)
 
@@ -110,7 +110,7 @@ class D405Plotter:
                 uv = PointClouds.xyz2uv(np.array(mu)[None, :], frame.intrinsics, frame.extrinsics)
                 u, v = uv[0, 0], uv[0, 1]
                 img = cv2.circle(
-                    img, (u, v), radius=5, color=hex2rgb(UGENT.RED), thickness=-1
+                    img, (u, v), radius=5, color=hex2rgb(UGENT.PINK), thickness=-1
                 )
 
         return img

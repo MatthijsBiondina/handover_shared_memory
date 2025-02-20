@@ -39,3 +39,5 @@ class CYCLONE_NAMESPACE:
 
     MAGTOUCH_RAW = "MagTouchRaw0"
     MAGTOUCH_PROCESSED = "magtouch.processed"
+
+    TORQUE_FORCE = "TF"

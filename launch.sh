@@ -28,8 +28,10 @@ python -m drake_simulation.drake_server &
 python -m curobo_simulation.curobo_planner &
 python -m curobo_simulation.curobo_forward_kinematics &
 python -m sensor_comm_dds.communication.readers.magtouch_serial_reader &
+python -m procedures.ft_saver &
 python -m ur5e.magtouch &
 python -m d405.d405_hardware &
+python -m d405.d405_recorder &
 python -m zed.zed_camera &
 
 python -m computer_vision.pointclouds &
@@ -44,9 +46,15 @@ python -m sensor_fusion.hands_sensor_fusion &
 
 python -m decisions.select_target_object &
 
+python -m visualization.d405_plotter &
 python -m visualization.zedplotter &
+python -m visualization.mediapipeposeplotter &
+python -m visualization.yoloplotter &
+python -m visualization.kalmanplotter &
+python -m visualization.target_plotter & 
 python -m visualization.sam_plotter &
 python -m visualization.gripperplotter &
+
 
 python -m procedures.approach_object &
 python -m optimization.grasp_pose_picker &

@@ -52,7 +52,7 @@ class TargetPlotter:
                 u, v = obj_uv[0, 0], obj_uv[0, 1]
                 img = cv2.circle(
                     points.color,
-                    (u, v), radius=5, color=hex2rgb(UGENT.BLUE), thickness=-1
+                    (u, v), radius=5, color=hex2rgb(UGENT.YELLOW), thickness=-1
                 )
                 self.web_streamer.update_frame(img[..., ::-1])
             except ContinueException:

@@ -7,6 +7,7 @@ import time
 from loguru import logger
 import matplotlib.pyplot as plt
 
+from cyclone.cyclone_participant import CycloneParticipant
 from sensor_comm_dds.communication.config.cyclone_config import CycloneConfig
 from sensor_comm_dds.communication.readers.websocket import Websocket
 from sensor_comm_dds.communication.data_classes.sequence import Sequence
@@ -23,8 +24,8 @@ class FTReaderConfig(WebsocketConfig, CycloneConfig):
 
 class FTReader:
     def __init__(self, config: FTReaderConfig):
+        self.participant = CycloneParticipant(rate_hz=30)
         self.config = config
-        self.data_publisher = DataPublisher(topic_name="FT", topic_data_type=Sequence)
         self.websocket = Websocket(websocket_server_url=self.config.websocket_server_url)
         max_connection_attempts = 3
         for connection_attempt in range(max_connection_attempts):
@@ -43,14 +44,21 @@ class FTReader:
         sample = Sequence([0 for _ in range(6)])
         while True:
             sample.values = self.rtde_receive.getActualTCPForce()
-            self.data_publisher.publish_sensor_data(sample)
-            time.sleep(0.01)
+            with open(f"/home/matt/TF/{time.time():.2f}.csv", "w+") as f:
+                f.write(" ".join(map(str, sample.values)))
+            self.participant.sleep()
 
 if __name__ == "__main__":
-    logger.info(f"Running {os.path.basename(__file__)}")
-    parser = argparse.ArgumentParser(description='Read data from a UR F/T sensor over a LAN.')
+    while True:
+        try:
+            logger.info(f"Running {os.path.basename(__file__)}")
+            parser = argparse.ArgumentParser(description='Read data from a UR F/T sensor over a LAN.')
 
-    ft_reader = FTReader(config=FTReaderConfig(ENABLE_WS=False,
-                                            topic_names=np.array(["FT"])))
+            ft_reader = FTReader(config=FTReaderConfig(ENABLE_WS=False,
+                                                    topic_names=np.array(["FT"])))
 
-    ft_reader.run()
+            ft_reader.run()
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            time.sleep(0.1)

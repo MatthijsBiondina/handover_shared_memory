@@ -73,7 +73,7 @@ class ApproachObjectProcedure:
         "zmax": 1.5,
     }
     PATIENCE = 20
-    MAG_THRESHOLD = 50 # 20
+    MAG_THRESHOLD = 30 # 20
     GRASP_OPTIMIZATION_TIME = 6
     GIVE_BACK_TCP = np.array(
         [

@@ -1,15 +1,26 @@
+import inspect
+from pathlib import Path
 import cv2
 import time
 import json
+import os
+import logging
+
 from threading import Thread, Lock
 from flask import Flask, Response, render_template_string, jsonify
 from cantrips.logging.logger import get_logger
 
 logger = get_logger()
 
+
 class WebImageStreamer:
-    def __init__(self, title="Image Stream", port=5000):
-        self.title = title
+    SAVE_ROOT = Path("/home/matt/Videos")
+
+    def __init__(self, title="Image Stream", port=5000, save=True):
+        self.title = os.path.basename(
+            inspect.getfile(inspect.currentframe().f_back)
+        ).replace(".py", "")
+        self.save = save
         self.port = port
         self.app = Flask(__name__)
         self.frame = None
@@ -21,8 +32,6 @@ class WebImageStreamer:
         self.server_thread.daemon = True
 
         # Suppress Flask startup message
-        import os
-        import logging
 
         os.environ["FLASK_ENV"] = "production"
         os.environ["FLASK_APP"] = "webimagestreamer"
@@ -30,9 +39,26 @@ class WebImageStreamer:
         cli = logging.getLogger("flask.cli")
         cli.propagate = False
 
-        logger.info(f"Flask server \"{title}\" running on port {port}.")
-        
+        self.root = self.init_filesystem()
+
+        logger.info(f'Flask server "{title}" running on port {port}.')
+
         self.server_thread.start()
+
+    def init_filesystem(self):
+        if not self.save:
+            return None
+
+        os.makedirs(self.SAVE_ROOT / self.title, exist_ok=True)
+        ii = 0
+        while True:
+            folder = self.SAVE_ROOT / self.title / str(ii).zfill(2)
+            if os.path.exists(folder):
+                ii += 1
+            else:
+                break
+        os.makedirs(folder)
+        return folder
 
     def define_routes(self):
         @self.app.route("/")
@@ -107,7 +133,7 @@ class WebImageStreamer:
                 self.generate_frames(),
                 mimetype="multipart/x-mixed-replace; boundary=frame",
             )
-            
+
         @self.app.route("/get_fps")
         def get_fps():
             return jsonify({"fps": self.fps})
@@ -115,17 +141,17 @@ class WebImageStreamer:
     def run_server(self):
         import logging
         import os
-        
+
         log = logging.getLogger("werkzeug")
         log.setLevel(logging.ERROR)
         log.disabled = True
 
         os.environ["FLASK_ENV"] = "production"
         os.environ["FLASK_APP"] = "webimagestreamer"
-        
+
         cli = logging.getLogger("flask.cli")
         cli.propagate = False
-        
+
         self.app.run(host="0.0.0.0", port=self.port, threaded=True, use_reloader=False)
 
     def calculate_fps(self):
@@ -140,14 +166,14 @@ class WebImageStreamer:
             with self.lock:
                 if self.frame is None:
                     continue
-                
+
                 # Calculate FPS
                 # self.calculate_fps()
-                
+
                 # Encode the frame in JPEG format
                 ret, buffer = cv2.imencode(".jpg", self.frame)
                 frame = buffer.tobytes()
-            
+
             # Yield the frame in byte format
             yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
@@ -155,3 +181,6 @@ class WebImageStreamer:
         with self.lock:
             self.calculate_fps()
             self.frame = frame
+            if self.save:
+                cv2.imwrite(str(self.root / f"{time.time():.2f}.jpg"), frame)
+

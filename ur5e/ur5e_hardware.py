@@ -81,7 +81,6 @@ class UR5eRobotArm:
         logger.info("UR5eRobotArm: Ready!")
 
     def run(self):
-        ii = 0
         while True:
             try:
                 self.__publish_robot_state()

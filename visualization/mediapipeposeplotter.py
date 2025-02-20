@@ -39,9 +39,9 @@ class MediapipePosePlotter:
     def run(self):
         while True:
             try:
-                # frame: FrameIDL = self.readers.frame()
+                frame: FrameIDL = self.readers.frame()
                 hands: MediapipeIDL = self.readers.mediapipe_pose()
-                img = hands.color
+                img = frame.color
 
                 uv = hands.uv[~np.any(np.isnan(hands.uv), axis=-1)]
                 for u, v in uv:
@@ -49,7 +49,7 @@ class MediapipePosePlotter:
                         img,
                         (int(u), int(v)),
                         radius=5,
-                        color=hex2rgb(UGENT.GREEN),
+                        color=hex2rgb(UGENT.RED),
                         thickness=-1,
                     )
                 self.web_streamer.update_frame(img[..., ::-1])

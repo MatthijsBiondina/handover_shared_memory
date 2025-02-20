@@ -52,7 +52,7 @@ class ZedMediapipe:
         self.mp_pose = mp.solutions.pose
         self.mediapipe = self.mp_pose.Pose()
 
-        self.webstreamer = WebImageStreamer("Mediapipe", port=5002)
+        self.webstreamer = WebImageStreamer("Mediapipe", port=5010)
 
         logger.info("ZedHands Ready!")
 
